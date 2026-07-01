@@ -1,4 +1,9 @@
-"""Speech-to-text (Whisper) and text-to-speech (Edge TTS) for Smart Clinic."""
+"""Speech-to-text (Whisper) and text-to-speech (Edge TTS) for Smart Clinic.
+
+Supports two Whisper backends:
+  1. Groq Whisper API  — preferred on Railway (no GPU needed)
+  2. Local faster-whisper — fallback for local dev with GPU
+"""
 
 from __future__ import annotations
 
@@ -17,8 +22,21 @@ VOICE_MAP = {
     "ar": os.getenv("TTS_VOICE_AR", "ar-EG-SalmaNeural"),
 }
 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "") or os.getenv("LM_API_KEY", "")
+GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3")
+
+
+def _groq_whisper_available() -> bool:
+    """Groq Whisper is available if we have an API key and the base URL points to Groq."""
+    if not GROQ_API_KEY or GROQ_API_KEY in ("lm-studio", "ollama"):
+        return False
+    base = os.getenv("LM_STUDIO_URL", "")
+    return "groq" in base.lower() or bool(os.getenv("GROQ_API_KEY", ""))
+
 
 def whisper_is_available() -> bool:
+    if _groq_whisper_available():
+        return True
     global _whisper_available
     if _whisper_available is None:
         try:
@@ -27,6 +45,45 @@ def whisper_is_available() -> bool:
         except ImportError:
             _whisper_available = False
     return _whisper_available
+
+
+def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | None = None) -> dict:
+    """Transcribe via Groq Whisper API (cloud, no GPU)."""
+    import httpx
+
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(audio_bytes)
+        tmp_path = tmp.name
+
+    try:
+        with open(tmp_path, "rb") as f:
+            files = {"file": (f"audio{suffix}", f, "audio/webm")}
+            data: dict = {"model": GROQ_WHISPER_MODEL, "response_format": "json"}
+            if language in ("ar", "en"):
+                data["language"] = language
+
+            resp = httpx.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                files=files,
+                data=data,
+                timeout=30.0,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+
+        transcript = (body.get("text") or "").strip()
+        detected = body.get("language") or language or "en"
+        return {
+            "transcript": transcript,
+            "language": detected,
+            "model": f"groq-{GROQ_WHISPER_MODEL}",
+        }
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 def model_for_role(role: str) -> ModelSize:
@@ -57,9 +114,13 @@ def transcribe_file(
     role: str = "patient",
     language: str | None = None,
 ) -> dict:
-    if not whisper_is_available():
+    if _groq_whisper_available():
+        with open(file_path, "rb") as f:
+            return _transcribe_groq(f.read(), language=language)
+
+    if not _whisper_available:
         raise RuntimeError(
-            "Whisper is not installed. Install faster-whisper on the server to enable voice input."
+            "Whisper is not available. Set GROQ_API_KEY or install faster-whisper."
         )
 
     model_size = model_for_role(role)
@@ -94,6 +155,9 @@ def transcribe_bytes(
     role: str = "patient",
     language: str | None = None,
 ) -> dict:
+    if _groq_whisper_available():
+        return _transcribe_groq(audio_bytes, suffix=suffix, language=language)
+
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name

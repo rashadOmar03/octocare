@@ -1071,8 +1071,10 @@ def save_conversation(
 
 @router.get("/voice/status")
 def voice_status(current_user: User = Depends(get_current_user)):
+    from voice_service import _groq_whisper_available
     return {
         "whisper_available": whisper_is_available(),
+        "groq_whisper": _groq_whisper_available(),
         "doctor_model": "medium",
         "other_roles_model": "small",
     }
@@ -1087,7 +1089,7 @@ async def transcribe_voice(
     if not whisper_is_available():
         raise HTTPException(
             status_code=503,
-            detail="Voice input is not configured on the server. Install faster-whisper or type your message.",
+            detail="Voice input is not configured. Set GROQ_API_KEY or install faster-whisper.",
         )
     audio_bytes = await file.read()
     if not audio_bytes:
