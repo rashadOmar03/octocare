@@ -2,31 +2,16 @@ import random
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from auth import hash_password, verify_password
-from database import SessionLocal
-from email_service import send_otp_email
+from email_service import send_otp_email_async
 from models import EmailOTP
 
 
 def _generate_code() -> str:
     return f"{random.randint(100000, 999999)}"
-
-
-def _send_otp_email_task(email: str, code: str, purpose: str) -> None:
-    db = SessionLocal()
-    try:
-        send_otp_email(db, email, code, purpose)
-    except Exception as exc:
-        print(
-            f"[Smart Clinic OTP] WARNING: email send failed but OTP is still valid. "
-            f"User can enter code {code} for {email}. Error: {exc}",
-            flush=True,
-        )
-    finally:
-        db.close()
 
 
 def create_and_send_otp(
@@ -60,18 +45,7 @@ def create_and_send_otp(
         flush=True,
     )
 
-    if background_tasks is not None:
-        background_tasks.add_task(_send_otp_email_task, normalized, code, purpose)
-        return
-
-    try:
-        send_otp_email(db, normalized, code, purpose)
-    except Exception as exc:
-        print(
-            f"[Smart Clinic OTP] WARNING: email send failed but OTP is still valid. "
-            f"User can enter code {code} for {normalized}. Error: {exc}",
-            flush=True,
-        )
+    send_otp_email_async(normalized, code, purpose)
 
 
 def verify_otp(db: Session, email: str, purpose: str, code: str) -> bool:

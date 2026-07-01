@@ -2,9 +2,11 @@ import logging
 import os
 import smtplib
 import ssl
+import threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import httpx
 from sqlalchemy.orm import Session
 
 from models import ClinicSettings
@@ -15,16 +17,20 @@ logger = logging.getLogger(__name__)
 def get_sender_info(db: Session) -> tuple[str, str]:
     settings = db.query(ClinicSettings).first()
     clinic_name = settings.clinic_name if settings else "Smart Clinic"
+    default_sender = os.getenv("EMAIL_FROM", os.getenv("SMTP_USER", "clinova.clinic@gmail.com")).strip().lower()
     sender = (
-        settings.email
+        settings.email.strip().lower()
         if settings and settings.email
-        else os.getenv("SMTP_USER", "clinova.clinic@gmail.com")
+        else default_sender
     )
-    return sender.strip().lower(), clinic_name
+    if sender != default_sender:
+        logger.warning("Clinic sender %s overridden with verified sender %s", sender, default_sender)
+        sender = default_sender
+    return sender, clinic_name
 
 
 def _smtp_config() -> dict:
-    smtp_user = os.getenv("SMTP_USER", "clinova.clinic@gmail.com").strip().lower()
+    smtp_user = os.getenv("SMTP_USER", os.getenv("EMAIL_FROM", "clinova.clinic@gmail.com")).strip().lower()
     return {
         "host": os.getenv("SMTP_HOST", "").strip(),
         "port": int(os.getenv("SMTP_PORT", "587")),
@@ -34,77 +40,34 @@ def _smtp_config() -> dict:
     }
 
 
+def email_provider_status() -> dict:
+    cfg = _smtp_config()
+    brevo = bool(os.getenv("BREVO_API_KEY", "").strip())
+    resend = bool(os.getenv("RESEND_API_KEY", "").strip())
+    smtp = bool(cfg["host"] and cfg["password"])
+    if brevo:
+        provider = "brevo"
+    elif resend:
+        provider = "resend"
+    elif smtp:
+        provider = "smtp"
+    else:
+        provider = "none"
+    return {
+        "provider": provider,
+        "configured": provider != "none",
+        "brevo": brevo,
+        "resend": resend,
+        "smtp": smtp,
+        "from_email": os.getenv("EMAIL_FROM", cfg["user"] or "clinova.clinic@gmail.com"),
+    }
+
+
 def smtp_is_configured() -> bool:
-    cfg = _smtp_config()
-    return bool(cfg["host"] and cfg["password"])
+    return email_provider_status()["configured"]
 
 
-def _send_via_smtp(from_addr: str, to_email: str, msg: MIMEMultipart) -> None:
-    cfg = _smtp_config()
-    if not cfg["host"] or not cfg["password"]:
-        raise RuntimeError(
-            "Email is not configured on the server. Add SMTP settings to backend/.env and restart the backend."
-        )
-
-    from_addr = from_addr.strip().lower()
-    to_email = to_email.strip().lower()
-    envelope_from = cfg["user"]
-
-    errors: list[str] = []
-
-    # Try STARTTLS on port 587 first, then SSL on 465.
-    attempts = [(cfg["host"], cfg["port"], cfg["use_tls"], False)]
-    if cfg["port"] != 465:
-        attempts.append((cfg["host"], 465, False, True))
-
-    for host, port, use_tls, use_ssl in attempts:
-        try:
-            if use_ssl:
-                context = ssl.create_default_context()
-                with smtplib.SMTP_SSL(host, port, timeout=15, context=context) as server:
-                    server.login(cfg["user"], cfg["password"])
-                    server.sendmail(envelope_from, [to_email], msg.as_string())
-            else:
-                with smtplib.SMTP(host, port, timeout=15) as server:
-                    server.ehlo()
-                    if use_tls:
-                        server.starttls(context=ssl.create_default_context())
-                        server.ehlo()
-                    server.login(cfg["user"], cfg["password"])
-                    server.sendmail(envelope_from, [to_email], msg.as_string())
-            logger.info("Email sent to %s via %s:%s", to_email, host, port)
-            return
-        except Exception as exc:
-            errors.append(f"{host}:{port} -> {exc}")
-            logger.warning("SMTP attempt failed (%s:%s): %s", host, port, exc)
-
-    raise RuntimeError("Could not send email. " + " | ".join(errors))
-
-
-def send_email(db: Session, to_email: str, subject: str, body: str, html_body: str | None = None) -> bool:
-    sender, clinic_name = get_sender_info(db)
-    to_email = to_email.lower().strip()
-
-    msg = MIMEMultipart("alternative")
-    msg["From"] = f"{clinic_name} <{sender}>"
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg["Reply-To"] = sender
-    msg.attach(MIMEText(body, "plain", "utf-8"))
-    if html_body:
-        msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    try:
-        _send_via_smtp(sender, to_email, msg)
-        return True
-    except Exception as exc:
-        logger.exception("Failed to send email to %s", to_email)
-        print(f"\n[Smart Clinic Email ERROR] {exc}\nTo: {to_email}\nSubject: {subject}\n{body}\n")
-        raise RuntimeError(str(exc)) from exc
-
-
-def send_otp_email(db: Session, to_email: str, otp_code: str, purpose: str) -> bool:
-    _, clinic_name = get_sender_info(db)
+def _otp_message(clinic_name: str, otp_code: str, purpose: str) -> tuple[str, str, str]:
     if purpose == "signup":
         subject = f"{clinic_name} verification code"
         body = (
@@ -141,7 +104,184 @@ def send_otp_email(db: Session, to_email: str, otp_code: str, purpose: str) -> b
             "This code expires in 10 minutes.</p>"
             "<p>If you do not see this email, check your <strong>Spam or Junk</strong> folder.</p>"
         )
+    return subject, body, html_body
+
+
+def _send_via_brevo(from_addr: str, from_name: str, to_email: str, subject: str, body: str, html_body: str | None) -> None:
+    api_key = os.getenv("BREVO_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("BREVO_API_KEY is not set")
+
+    payload = {
+        "sender": {"name": from_name, "email": from_addr},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "textContent": body,
+    }
+    if html_body:
+        payload["htmlContent"] = html_body
+
+    response = httpx.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers={"api-key": api_key, "content-type": "application/json"},
+        json=payload,
+        timeout=20.0,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"Brevo API error {response.status_code}: {response.text[:300]}")
+
+
+def _send_via_resend(from_addr: str, from_name: str, to_email: str, subject: str, body: str, html_body: str | None) -> None:
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("RESEND_API_KEY is not set")
+
+    payload = {
+        "from": f"{from_name} <{from_addr}>",
+        "to": [to_email],
+        "subject": subject,
+        "text": body,
+    }
+    if html_body:
+        payload["html"] = html_body
+
+    response = httpx.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {api_key}", "content-type": "application/json"},
+        json=payload,
+        timeout=20.0,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"Resend API error {response.status_code}: {response.text[:300]}")
+
+
+def _send_via_smtp(from_addr: str, to_email: str, msg: MIMEMultipart) -> None:
+    cfg = _smtp_config()
+    if not cfg["host"] or not cfg["password"]:
+        raise RuntimeError(
+            "Email is not configured. Set BREVO_API_KEY (recommended on Railway) or SMTP settings."
+        )
+
+    from_addr = from_addr.strip().lower()
+    to_email = to_email.strip().lower()
+    envelope_from = cfg["user"]
+
+    errors: list[str] = []
+    attempts = []
+    if cfg["port"] == 465:
+        attempts.append((cfg["host"], 465, False, True))
+    else:
+        if cfg["use_tls"]:
+            attempts.append((cfg["host"], cfg["port"], True, False))
+        attempts.append((cfg["host"], 465, False, True))
+        if not cfg["use_tls"]:
+            attempts.append((cfg["host"], cfg["port"], False, False))
+
+    seen: set[tuple] = set()
+    ordered_attempts = []
+    for item in attempts:
+        if item not in seen:
+            seen.add(item)
+            ordered_attempts.append(item)
+
+    for host, port, use_tls, use_ssl in ordered_attempts:
+        try:
+            if use_ssl:
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(host, port, timeout=20, context=context) as server:
+                    server.login(cfg["user"], cfg["password"])
+                    server.sendmail(envelope_from, [to_email], msg.as_string())
+            else:
+                with smtplib.SMTP(host, port, timeout=20) as server:
+                    server.ehlo()
+                    if use_tls:
+                        server.starttls(context=ssl.create_default_context())
+                        server.ehlo()
+                    server.login(cfg["user"], cfg["password"])
+                    server.sendmail(envelope_from, [to_email], msg.as_string())
+            logger.info("Email sent to %s via SMTP %s:%s", to_email, host, port)
+            return
+        except Exception as exc:
+            errors.append(f"{host}:{port} -> {exc}")
+            logger.warning("SMTP attempt failed (%s:%s): %s", host, port, exc)
+
+    raise RuntimeError("Could not send email via SMTP. " + " | ".join(errors))
+
+
+def _dispatch_email(from_addr: str, from_name: str, to_email: str, subject: str, body: str, html_body: str | None) -> str:
+    status = email_provider_status()
+    if status["brevo"]:
+        _send_via_brevo(from_addr, from_name, to_email, subject, body, html_body)
+        return "brevo"
+    if status["resend"]:
+        _send_via_resend(from_addr, from_name, to_email, subject, body, html_body)
+        return "resend"
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = f"{from_name} <{from_addr}>"
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg["Reply-To"] = from_addr
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+    if html_body:
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
+    _send_via_smtp(from_addr, to_email, msg)
+    return "smtp"
+
+
+def send_email(db: Session, to_email: str, subject: str, body: str, html_body: str | None = None) -> bool:
+    sender, clinic_name = get_sender_info(db)
+    to_email = to_email.lower().strip()
+
+    try:
+        provider = _dispatch_email(sender, clinic_name, to_email, subject, body, html_body)
+        logger.info("Email sent to %s via %s", to_email, provider)
+        print(f"[Smart Clinic Email] Sent to {to_email} via {provider}", flush=True)
+        return True
+    except Exception as exc:
+        logger.exception("Failed to send email to %s", to_email)
+        print(
+            f"\n[Smart Clinic Email ERROR] {exc}\n"
+            f"Provider status: {email_provider_status()}\n"
+            f"To: {to_email}\nSubject: {subject}\n{body}\n",
+            flush=True,
+        )
+        raise RuntimeError(str(exc)) from exc
+
+
+def send_email_async(to_email: str, subject: str, body: str, html_body: str | None = None) -> None:
+    def _task() -> None:
+        from database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            send_email(db, to_email, subject, body, html_body=html_body)
+        except Exception as exc:
+            print(f"[Smart Clinic Email] Background send failed to {to_email}: {exc}", flush=True)
+        finally:
+            db.close()
+
+    thread = threading.Thread(target=_task, name=f"email-{to_email}", daemon=False)
+    thread.start()
+
+
+def send_otp_email(db: Session, to_email: str, otp_code: str, purpose: str) -> bool:
+    _, clinic_name = get_sender_info(db)
+    subject, body, html_body = _otp_message(clinic_name, otp_code, purpose)
     return send_email(db, to_email, subject, body, html_body=html_body)
+
+
+def send_otp_email_async(to_email: str, otp_code: str, purpose: str) -> None:
+    from database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        _, clinic_name = get_sender_info(db)
+    finally:
+        db.close()
+
+    subject, body, html_body = _otp_message(clinic_name, otp_code, purpose)
+    send_email_async(to_email, subject, body, html_body)
 
 
 def send_patient_welcome_email(

@@ -101,13 +101,17 @@ def _repair_appointments():
 
 
 def _log_smtp_status():
-    from email_service import smtp_is_configured, _smtp_config
+    from email_service import email_provider_status
 
-    if smtp_is_configured():
-        cfg = _smtp_config()
-        print(f"[Smart Clinic] SMTP ready: {cfg['user']} via {cfg['host']}:{cfg['port']}")
+    status = email_provider_status()
+    if status["configured"]:
+        print(
+            f"[Smart Clinic] Email ready via {status['provider']} "
+            f"(from {status['from_email']})"
+        )
     else:
-        print("[Smart Clinic] WARNING: SMTP is NOT configured — OTP emails will NOT be sent.")
+        print("[Smart Clinic] WARNING: Email is NOT configured — OTP emails will NOT be sent.")
+        print("[Smart Clinic] Add BREVO_API_KEY to Railway (recommended) or SMTP settings.")
 
 
 def _normalize_user_emails():
@@ -533,6 +537,13 @@ def serve_upload(
 @app.get("/api")
 def api_root():
     return {"message": "Smart Clinic API"}
+
+
+@app.get("/api/email-status")
+def email_status():
+    from email_service import email_provider_status
+
+    return email_provider_status()
 
 if WEB_BUILD.exists():
     app.mount("/static", StaticFiles(directory=str(WEB_BUILD)), name="flutter_static")
