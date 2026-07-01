@@ -1,0 +1,49 @@
+# ─── Secrets (NEVER commit) ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+backend/.env
+
+# ─── Database (local dev only; production uses Railway PostgreSQL) ─────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+.pytest_cache/
+.venv/
+venv/
+*.log
+
+# ─── Backend uploads (patient files, avatars — created at runtime) ─────────────
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ─── Flutter / Dart ─────────────────────────────────────────────────────────────
+smart_clinic/build/
+smart_clinic/.dart_tool/
+smart_clinic/.packages
+smart_clinic/.flutter-plugins
+smart_clinic/.flutter-plugins-dependencies
+
+# ─── IDE / OS ─────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+node_modules/
+cloudflared.exe
+cloudflared
+*.exe
+
+# Local dev docs / tools (not needed for deploy)
+gemma_local.ipynb
+Smart_Clinic_Testing_Guide.docx

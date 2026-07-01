@@ -1,0 +1,27 @@
+// Optional ESP32 loop() tweak for faster, cleaner streaming to the app.
+// Replace the bottom of loop() in your ESP32 sketch with this:
+
+/*
+  readArduinoUart();
+
+  if (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+    return;
+  }
+
+  if (!client || !client.connected()) {
+    client = server.available();
+    if (client) {
+      Serial.println("Flutter Connected!");
+    }
+  }
+
+  // Send only when Arduino sends a NEW line (avoids flooding duplicates).
+  static String lastSent = "";
+  if (client && client.connected() && latestData.length() > 0 && latestData != lastSent) {
+    client.println(latestData);
+    lastSent = latestData;
+  }
+
+  delay(1);  // was delay(10) — lower latency
+*/

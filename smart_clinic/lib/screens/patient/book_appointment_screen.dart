@@ -1,0 +1,461 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../l10n/localization.dart';
+import '../../config/routes.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/appointment_service.dart';
+import '../../services/api_service.dart';
+import '../../services/review_service.dart';
+import '../../models/doctor.dart';
+import '../../utils/time_format.dart';
+
+class BookAppointmentScreen extends StatefulWidget {
+  const BookAppointmentScreen({super.key});
+
+  @override
+  State<BookAppointmentScreen> createState() => _BookAppointmentScreenState();
+}
+
+class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
+  final AppointmentService _appointmentService = AppointmentService();
+  final ReviewService _reviewService = ReviewService();
+  int _currentStep = 0;
+  bool _isLoading = false;
+
+  List<Map<String, dynamic>> _specialties = [];
+  List<Doctor> _doctors = [];
+  List<Map<String, dynamic>> _slots = [];
+
+  dynamic _selectedSpecialtyId;
+  String? _selectedSpecialtyName;
+  Doctor? _selectedDoctor;
+  DateTime? _selectedDate;
+  String? _selectedTime;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      if (!auth.profileComplete) {
+        Navigator.pushReplacementNamed(context, AppRoutes.profileComplete);
+        return;
+      }
+      _loadSpecialties();
+    });
+  }
+
+  Future<void> _loadSpecialties() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await ApiService.instance.get('/appointments/specialties');
+      if (response is List) {
+        _specialties = response.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
+    }
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _loadDoctors(dynamic specialtyId) async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await ApiService.instance.get('/appointments/doctors?specialty_id=$specialtyId');
+      if (response is List) {
+        _doctors = response.map((u) => Doctor.fromJson(Map<String, dynamic>.from(u))).toList();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
+    }
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _loadSlots() async {
+    if (_selectedDoctor?.id == null || _selectedDate == null) return;
+    setState(() => _isLoading = true);
+    try {
+      final dateStr = '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}';
+      _slots = await _appointmentService.getAvailableSlots(_selectedDoctor!.id!, dateStr);
+    } catch (_) {
+      _slots = [];
+    }
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _bookAppointment() async {
+    if (_selectedDoctor == null || _selectedDate == null || _selectedTime == null) return;
+    setState(() => _isLoading = true);
+    try {
+      final dateStr = '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}';
+      await _appointmentService.bookAppointment({
+        'doctor_id': _selectedDoctor!.id,
+        'date': dateStr,
+        'time_slot': _selectedTime,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.tr('appointment_booked')), backgroundColor: const Color(0xFF388E3C)),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
+    }
+    setState(() => _isLoading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(AppLocalizations.tr('book_appointment'))),
+      body: Stepper(
+        currentStep: _currentStep,
+        onStepContinue: _onStepContinue,
+        onStepCancel: () {
+          if (_currentStep > 0) setState(() => _currentStep--);
+        },
+        controlsBuilder: (context, details) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Row(
+              children: [
+                ElevatedButton(
+                  onPressed: _canContinue() ? details.onStepContinue : null,
+                  child: _isLoading && _currentStep == 3
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Text(_currentStep == 3 ? AppLocalizations.tr('confirm') : AppLocalizations.tr('next')),
+                ),
+                const SizedBox(width: 12),
+                if (_currentStep > 0)
+                  OutlinedButton(
+                    onPressed: details.onStepCancel,
+                    child: Text(AppLocalizations.tr('previous')),
+                  ),
+              ],
+            ),
+          );
+        },
+        steps: [
+          Step(
+            title: Text(AppLocalizations.tr('select_specialty')),
+            isActive: _currentStep >= 0,
+            content: _isLoading && _currentStep == 0
+                ? const Center(child: CircularProgressIndicator())
+                : _buildSpecialtyGrid(),
+          ),
+          Step(
+            title: Text(AppLocalizations.tr('select_doctor')),
+            isActive: _currentStep >= 1,
+            content: _isLoading && _currentStep == 1
+                ? const Center(child: CircularProgressIndicator())
+                : _buildDoctorList(),
+          ),
+          Step(
+            title: Text(AppLocalizations.tr('select_date')),
+            isActive: _currentStep >= 2,
+            content: _buildDatePicker(),
+          ),
+          Step(
+            title: Text(AppLocalizations.tr('select_time')),
+            isActive: _currentStep >= 3,
+            content: _isLoading && _currentStep == 3
+                ? const Center(child: CircularProgressIndicator())
+                : _buildTimeGrid(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _canContinue() {
+    switch (_currentStep) {
+      case 0:
+        return _selectedSpecialtyId != null;
+      case 1:
+        return _selectedDoctor != null;
+      case 2:
+        return _selectedDate != null;
+      case 3:
+        return _selectedTime != null;
+      default:
+        return false;
+    }
+  }
+
+  void _onStepContinue() async {
+    if (_currentStep == 0 && _selectedSpecialtyId != null) {
+      await _loadDoctors(_selectedSpecialtyId!);
+      if (_doctors.isNotEmpty) {
+        setState(() => _currentStep = 1);
+      }
+    } else if (_currentStep == 1 && _selectedDoctor != null) {
+      setState(() {
+        _currentStep = 2;
+        _selectedDate ??= DateTime.now().add(const Duration(days: 1));
+      });
+    } else if (_currentStep == 2 && _selectedDate != null) {
+      _loadSlots();
+      setState(() => _currentStep = 3);
+    } else if (_currentStep == 3 && _selectedTime != null) {
+      _bookAppointment();
+    }
+  }
+
+  Widget _buildSpecialtyGrid() {
+    if (_specialties.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(AppLocalizations.tr('no_data')),
+      );
+    }
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 2.5, crossAxisSpacing: 8, mainAxisSpacing: 8),
+      itemCount: _specialties.length,
+      itemBuilder: (ctx, i) {
+        final s = _specialties[i];
+        final isSelected = _selectedSpecialtyId == s['id'];
+        return GestureDetector(
+          onTap: () => setState(() {
+            _selectedSpecialtyId = s['id'];
+            _selectedSpecialtyName = s['name'];
+          }),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isSelected ? Theme.of(context).colorScheme.primary : const Color(0xFFE0E0E0)),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              s['name'] ?? '',
+              style: TextStyle(
+                color: isSelected ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _ratingLine(Doctor d) {
+    if (d.reviewCount == null || d.reviewCount! <= 0) {
+      return Text(
+        AppLocalizations.tr('no_reviews_yet'),
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
+    final avg = d.averageRating ?? 0;
+    return Row(
+      children: [
+        ...List.generate(5, (i) {
+          final filled = avg >= i + 1;
+          final half = !filled && avg > i && avg < i + 1;
+          return Icon(
+            filled ? Icons.star : (half ? Icons.star_half : Icons.star_border),
+            size: 16,
+            color: const Color(0xFFF9A825),
+          );
+        }),
+        const SizedBox(width: 6),
+        Text('${d.averageRating?.toStringAsFixed(1) ?? '0.0'} (${d.reviewCount})'),
+      ],
+    );
+  }
+
+  Future<void> _showDoctorReviews(Doctor d) async {
+    if (d.id == null) return;
+    try {
+      final data = await _reviewService.getDoctorReviews(d.id!);
+      if (!mounted) return;
+      final reviews = (data['reviews'] as List?) ?? [];
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (ctx) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.55,
+          minChildSize: 0.35,
+          maxChildSize: 0.9,
+          builder: (_, controller) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(d.name ?? '', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                _ratingLine(d),
+                const SizedBox(height: 12),
+                Text(AppLocalizations.tr('patient_reviews'), style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: reviews.isEmpty
+                      ? Center(child: Text(AppLocalizations.tr('no_reviews_yet')))
+                      : ListView.separated(
+                          controller: controller,
+                          itemCount: reviews.length,
+                          separatorBuilder: (_, __) => const Divider(height: 16),
+                          itemBuilder: (_, i) {
+                            final r = Map<String, dynamic>.from(reviews[i] as Map);
+                            final stars = r['doctor_rating'] is int ? r['doctor_rating'] as int : int.tryParse('${r['doctor_rating']}') ?? 0;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    ...List.generate(5, (j) => Icon(
+                                      j < stars ? Icons.star : Icons.star_border,
+                                      size: 16,
+                                      color: const Color(0xFFF9A825),
+                                    )),
+                                    const Spacer(),
+                                    Text(r['created_at']?.toString().split('T').first ?? ''),
+                                  ],
+                                ),
+                                if ((r['doctor_comment'] ?? '').toString().isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Text(r['doctor_comment'].toString()),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
+    }
+  }
+
+  Widget _buildDoctorList() {
+    if (_doctors.isEmpty) {
+      return Padding(padding: const EdgeInsets.all(16), child: Text(AppLocalizations.tr('no_data')));
+    }
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _doctors.length,
+      itemBuilder: (ctx, i) {
+        final d = _doctors[i];
+        final isSelected = _selectedDoctor?.id == d.id;
+        return Card(
+          color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1) : null,
+          child: ListTile(
+            leading: CircleAvatar(child: Text(d.name?.isNotEmpty == true ? d.name![0] : '?')),
+            title: Text(d.name ?? ''),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(d.specialty ?? _selectedSpecialtyName ?? ''),
+                const SizedBox(height: 4),
+                _ratingLine(d),
+              ],
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (d.reviewCount != null && d.reviewCount! > 0)
+                  IconButton(
+                    icon: const Icon(Icons.rate_review_outlined),
+                    tooltip: AppLocalizations.tr('patient_reviews'),
+                    onPressed: () => _showDoctorReviews(d),
+                  ),
+                if (isSelected) Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary),
+              ],
+            ),
+            isThreeLine: true,
+            onTap: () => setState(() => _selectedDoctor = d),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDatePicker() {
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text(
+            AppLocalizations.tr('book_day_before'),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        CalendarDatePicker(
+          initialDate: _selectedDate ?? tomorrow,
+          firstDate: tomorrow,
+          lastDate: DateTime.now().add(const Duration(days: 60)),
+          onDateChanged: (date) => setState(() => _selectedDate = date),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimeGrid() {
+    if (_slots.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Icon(Icons.event_busy, size: 48, color: Theme.of(context).colorScheme.error.withValues(alpha: 0.5)),
+            const SizedBox(height: 8),
+            Text(
+              AppLocalizations.tr('no_slots_available'),
+              style: Theme.of(context).textTheme.bodyLarge,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _slots.map((slot) {
+        final time = slot['time'] as String;
+        final available = slot['available'] as bool? ?? true;
+        final isSelected = _selectedTime == time;
+        return ChoiceChip(
+          label: Text(TimeFormat.format24To12(time)),
+          selected: isSelected,
+          onSelected: available ? (selected) => setState(() => _selectedTime = selected ? time : null) : null,
+          backgroundColor: available ? null : const Color(0xFFEEEEEE),
+          selectedColor: Theme.of(context).colorScheme.primary,
+          labelStyle: TextStyle(
+            color: isSelected ? Colors.white : (available ? null : const Color(0xFF9E9E9E)),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
