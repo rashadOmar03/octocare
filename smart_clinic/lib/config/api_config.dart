@@ -4,10 +4,10 @@ import 'api_config_web.dart' if (dart.library.io) 'api_config_stub.dart' as plat
 class ApiConfig {
   // ─── CLOUD BACKEND URL (set this after Railway deploy) ───────────────
   // Change this to your Railway URL, e.g. 'https://smart-clinic-xxxx.up.railway.app'
-  static const String _cloudUrl = 'https://YOUR_RAILWAY_URL.up.railway.app';
+  static const String _cloudUrl = 'https://octocare-production.up.railway.app';
 
   // Set to true once you deploy to Railway
-  static const bool useCloud = false;
+  static const bool useCloud = true;
   // ─────────────────────────────────────────────────────────────────────
 
   /// Android emulator → backend on your PC
