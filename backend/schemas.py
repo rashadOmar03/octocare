@@ -70,6 +70,7 @@ class RegisterPendingResponse(BaseModel):
     message: str
     requires_verification: bool = True
     email: str
+    email_sent: bool = True
 
 
 class VerifyEmailRequest(BaseModel):

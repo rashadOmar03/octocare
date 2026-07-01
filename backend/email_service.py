@@ -128,7 +128,13 @@ def _send_via_brevo(from_addr: str, from_name: str, to_email: str, subject: str,
         timeout=20.0,
     )
     if response.status_code >= 400:
-        raise RuntimeError(f"Brevo API error {response.status_code}: {response.text[:300]}")
+        detail = response.text[:500]
+        if "not verified" in detail.lower() or "sender" in detail.lower():
+            raise RuntimeError(
+                f"Brevo rejected sender {from_addr}. Verify this email in Brevo → Senders. Details: {detail}"
+            )
+        raise RuntimeError(f"Brevo API error {response.status_code}: {detail}")
+    print(f"[Smart Clinic Email] Brevo accepted message to {to_email}: {response.text[:200]}", flush=True)
 
 
 def _send_via_resend(from_addr: str, from_name: str, to_email: str, subject: str, body: str, html_body: str | None) -> None:

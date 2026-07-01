@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from sqlalchemy.orm import Session
 
-from database import engine, SessionLocal, Base
+from database import engine, SessionLocal, Base, get_db
 from models import (
     User, Profile, Specialty, Doctor, DoctorSchedule, ClinicSettings,
 )
@@ -544,6 +544,25 @@ def email_status():
     from email_service import email_provider_status
 
     return email_provider_status()
+
+
+@app.post("/api/test-email")
+def test_email_send(db: Session = Depends(get_db)):
+    """Send a test email to EMAIL_FROM — confirms Brevo/SMTP works."""
+    from email_service import get_sender_info, send_email
+
+    sender, clinic_name = get_sender_info(db)
+    try:
+        send_email(
+            db,
+            sender,
+            f"{clinic_name} — test email",
+            "If you received this, OTP email delivery is working.",
+            html_body="<p>If you received this, <strong>OTP email delivery is working</strong>.</p>",
+        )
+        return {"ok": True, "sent_to": sender, "message": "Check the inbox for your sender email."}
+    except Exception as exc:
+        return {"ok": False, "sent_to": sender, "error": str(exc)}
 
 if WEB_BUILD.exists():
     app.mount("/static", StaticFiles(directory=str(WEB_BUILD)), name="flutter_static")

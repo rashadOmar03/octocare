@@ -59,10 +59,15 @@ def register(data: UserCreate, background_tasks: BackgroundTasks, db: Session = 
     existing = _find_user_by_email(db, email)
     if existing:
         if not existing.email_verified:
-            create_and_send_otp(db, email, "signup", background_tasks)
+            email_sent = create_and_send_otp(db, email, "signup", background_tasks)
             return RegisterPendingResponse(
-                message="Verification code sent to your email.",
+                message=(
+                    "Verification code sent to your email."
+                    if email_sent
+                    else "Account exists but email could not be sent. Use Resend code or contact support."
+                ),
                 email=email,
+                email_sent=email_sent,
             )
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -96,10 +101,15 @@ def register(data: UserCreate, background_tasks: BackgroundTasks, db: Session = 
         db.add(profile)
         db.commit()
 
-    create_and_send_otp(db, email, "signup", background_tasks)
+    email_sent = create_and_send_otp(db, email, "signup", background_tasks)
     return RegisterPendingResponse(
-        message="Account created. Enter the verification code sent to your email.",
+        message=(
+            "Account created. Enter the verification code sent to your email."
+            if email_sent
+            else "Account created but email delivery failed. Tap Resend code or check Railway logs."
+        ),
         email=email,
+        email_sent=email_sent,
     )
 
 
@@ -133,9 +143,13 @@ def resend_otp(data: ResendOtpRequest, background_tasks: BackgroundTasks, db: Se
     if data.purpose == "signup" and user.email_verified:
         raise HTTPException(status_code=400, detail="Email is already verified")
 
-    create_and_send_otp(db, email, data.purpose, background_tasks)
+    email_sent = create_and_send_otp(db, email, data.purpose, background_tasks)
     return MessageResponse(
-        message="A new verification code has been sent to your email. Check your Spam or Junk folder if you do not see it within a few minutes.",
+        message=(
+            "A new verification code has been sent to your email. Check your Spam or Junk folder if you do not see it within a few minutes."
+            if email_sent
+            else "Could not send email. Verify Brevo sender is confirmed, then try again."
+        ),
     )
 
 
