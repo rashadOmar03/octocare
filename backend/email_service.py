@@ -61,11 +61,11 @@ def _send_via_smtp(from_addr: str, to_email: str, msg: MIMEMultipart) -> None:
         try:
             if use_ssl:
                 context = ssl.create_default_context()
-                with smtplib.SMTP_SSL(host, port, timeout=30, context=context) as server:
+                with smtplib.SMTP_SSL(host, port, timeout=15, context=context) as server:
                     server.login(cfg["user"], cfg["password"])
                     server.sendmail(envelope_from, [to_email], msg.as_string())
             else:
-                with smtplib.SMTP(host, port, timeout=30) as server:
+                with smtplib.SMTP(host, port, timeout=15) as server:
                     server.ehlo()
                     if use_tls:
                         server.starttls(context=ssl.create_default_context())

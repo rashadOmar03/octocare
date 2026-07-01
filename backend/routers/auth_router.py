@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
@@ -54,12 +54,12 @@ def _token_response(user: User, profile: Profile | None = None) -> TokenResponse
 
 
 @router.post("/register", response_model=RegisterPendingResponse, status_code=status.HTTP_201_CREATED)
-def register(data: UserCreate, db: Session = Depends(get_db)):
+def register(data: UserCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     email = _norm_email(data.email)
     existing = _find_user_by_email(db, email)
     if existing:
         if not existing.email_verified:
-            create_and_send_otp(db, email, "signup")
+            create_and_send_otp(db, email, "signup", background_tasks)
             return RegisterPendingResponse(
                 message="Verification code sent to your email.",
                 email=email,
@@ -96,7 +96,7 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
         db.add(profile)
         db.commit()
 
-    create_and_send_otp(db, email, "signup")
+    create_and_send_otp(db, email, "signup", background_tasks)
     return RegisterPendingResponse(
         message="Account created. Enter the verification code sent to your email.",
         email=email,
@@ -121,7 +121,7 @@ def verify_email(data: VerifyEmailRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/resend-otp", response_model=MessageResponse)
-def resend_otp(data: ResendOtpRequest, db: Session = Depends(get_db)):
+def resend_otp(data: ResendOtpRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     if data.purpose not in ("signup", "password_reset"):
         raise HTTPException(status_code=400, detail="Invalid purpose")
 
@@ -133,14 +133,14 @@ def resend_otp(data: ResendOtpRequest, db: Session = Depends(get_db)):
     if data.purpose == "signup" and user.email_verified:
         raise HTTPException(status_code=400, detail="Email is already verified")
 
-    create_and_send_otp(db, email, data.purpose)
+    create_and_send_otp(db, email, data.purpose, background_tasks)
     return MessageResponse(
         message="A new verification code has been sent to your email. Check your Spam or Junk folder if you do not see it within a few minutes.",
     )
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(data: UserLogin, db: Session = Depends(get_db)):
+def login(data: UserLogin, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     identifier = data.email_or_phone.strip()
     if "@" in identifier:
         identifier = _norm_email(identifier)
@@ -156,7 +156,7 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Account is deactivated")
 
     if user.role == "patient" and not user.email_verified:
-        create_and_send_otp(db, user.email, "signup")
+        create_and_send_otp(db, user.email, "signup", background_tasks)
         raise HTTPException(
             status_code=403,
             detail="Please verify your email first. Check your inbox (and spam) for the 6-digit code. A new code has been sent.",
@@ -204,7 +204,7 @@ def change_password(
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
-def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(data: ForgotPasswordRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     email = _norm_email(data.email)
     user = _find_user_by_email(db, email)
     if not user:
@@ -212,7 +212,7 @@ def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
             status_code=404,
             detail="This email is not registered with us. Please sign up first.",
         )
-    create_and_send_otp(db, email, "password_reset")
+    create_and_send_otp(db, email, "password_reset", background_tasks)
     return ForgotPasswordResponse(
         message="A reset code has been sent to your email. Check your Spam or Junk folder if you do not see it within a few minutes.",
     )

@@ -5,7 +5,7 @@ import os
 import base64
 from datetime import datetime, date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
@@ -465,6 +465,7 @@ def list_payable_appointments(
 @router.post("/patients", status_code=status.HTTP_201_CREATED)
 def register_patient(
     data: ReceptionistPatientCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_role("receptionist", "admin")),
     db: Session = Depends(get_db),
 ):
@@ -513,7 +514,7 @@ def register_patient(
     db.add(profile)
     db.commit()
 
-    create_and_send_otp(db, email, "signup")
+    create_and_send_otp(db, email, "signup", background_tasks)
     welcome_sent = False
     try:
         send_patient_welcome_email(db, email, temp_password, data.first_name)

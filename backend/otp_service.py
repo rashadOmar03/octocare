@@ -2,10 +2,11 @@ import random
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 
 from auth import hash_password, verify_password
+from database import SessionLocal
 from email_service import send_otp_email
 from models import EmailOTP
 
@@ -14,7 +15,26 @@ def _generate_code() -> str:
     return f"{random.randint(100000, 999999)}"
 
 
-def create_and_send_otp(db: Session, email: str, purpose: str) -> None:
+def _send_otp_email_task(email: str, code: str, purpose: str) -> None:
+    db = SessionLocal()
+    try:
+        send_otp_email(db, email, code, purpose)
+    except Exception as exc:
+        print(
+            f"[Smart Clinic OTP] WARNING: email send failed but OTP is still valid. "
+            f"User can enter code {code} for {email}. Error: {exc}",
+            flush=True,
+        )
+    finally:
+        db.close()
+
+
+def create_and_send_otp(
+    db: Session,
+    email: str,
+    purpose: str,
+    background_tasks: BackgroundTasks | None = None,
+) -> None:
     normalized = email.lower().strip()
     db.query(EmailOTP).filter(
         EmailOTP.email == normalized,
@@ -32,6 +52,7 @@ def create_and_send_otp(db: Session, email: str, purpose: str) -> None:
         used=False,
     )
     db.add(otp)
+    db.commit()
 
     print(
         f"\n[Smart Clinic OTP] purpose={purpose} email={normalized} code={code} "
@@ -39,18 +60,18 @@ def create_and_send_otp(db: Session, email: str, purpose: str) -> None:
         flush=True,
     )
 
+    if background_tasks is not None:
+        background_tasks.add_task(_send_otp_email_task, normalized, code, purpose)
+        return
+
     try:
         send_otp_email(db, normalized, code, purpose)
     except Exception as exc:
-        db.commit()
         print(
             f"[Smart Clinic OTP] WARNING: email send failed but OTP is still valid. "
             f"User can enter code {code} for {normalized}. Error: {exc}",
             flush=True,
         )
-        return
-
-    db.commit()
 
 
 def verify_otp(db: Session, email: str, purpose: str, code: str) -> bool:
