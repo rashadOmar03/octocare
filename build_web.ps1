@@ -8,6 +8,11 @@ Set-Location (Join-Path $root "smart_clinic")
 Write-Host "Building Flutter web (release)..." -ForegroundColor Cyan
 flutter build web --release
 
+$backendWeb = Join-Path $root "backend" "web"
+Write-Host "Copying web build to backend/web for Railway..." -ForegroundColor Cyan
+if (Test-Path $backendWeb) { Remove-Item $backendWeb -Recurse -Force }
+Copy-Item -Path (Join-Path (Get-Location) "build" "web") -Destination $backendWeb -Recurse
+
 Write-Host ""
-Write-Host "Done. If uvicorn is already running, restart it once." -ForegroundColor Green
-Write-Host "Then open the app and refresh normally — hard refresh is not required." -ForegroundColor Green
+Write-Host "Done. Web output: smart_clinic/build/web" -ForegroundColor Green
+Write-Host "Railway bundle: backend/web (commit + push to deploy online web)" -ForegroundColor Green

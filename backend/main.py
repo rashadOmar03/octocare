@@ -462,7 +462,9 @@ def _migrate_prescription_columns():
     conn.close()
 
 
-WEB_BUILD = Path(__file__).parent.parent / "smart_clinic" / "build" / "web"
+WEB_BUILD = Path(__file__).parent / "web"
+if not WEB_BUILD.exists():
+    WEB_BUILD = Path(__file__).parent.parent / "smart_clinic" / "build" / "web"
 
 
 def _web_build_id() -> str:
