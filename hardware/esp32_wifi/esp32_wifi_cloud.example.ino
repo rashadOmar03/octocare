@@ -1,33 +1,14 @@
 /*
- * Smart Clinic – ESP32 WiFi → Cloud Backend
- *
- * Receives sensor lines from Arduino Uno via UART (Serial2),
- * then HTTP-POSTs them to the cloud backend's /sensors/live/ingest/batch endpoint.
- *
- * WIRING:
- *   ESP32 RX2 (GPIO 16) ← Arduino TX (SoftwareSerial pin 11 or HC-05 TX)
- *   ESP32 TX2 (GPIO 17) → Arduino RX (SoftwareSerial pin 10 or HC-05 RX)  [optional]
- *   GND ↔ GND
- *
- * CONFIGURATION:
- *   1. Set WIFI_SSID and WIFI_PASS to your WiFi network
- *   2. Set BACKEND_HOST to your Railway backend URL (no https://, no trailing /)
- *      Example: "smart-clinic-production.up.railway.app"
- *   3. Upload to ESP32 via Arduino IDE
- *
- * Arduino IDE setup:
- *   Board: ESP32 Dev Module
- *   Libraries needed: WiFi.h, HTTPClient.h (built-in with ESP32 board package)
+ * Smart Clinic – ESP32 WiFi → Cloud Backend (template)
+ * Copy to esp32_wifi_cloud.ino and set WIFI_SSID, WIFI_PASS, BACKEND_HOST.
  */
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 
-// ─── CHANGE THESE ────────────────────────────────────────────────────────────
 const char* WIFI_SSID    = "YOUR_WIFI_SSID";
 const char* WIFI_PASS    = "YOUR_WIFI_PASSWORD";
-const char* BACKEND_HOST = "YOUR_RAILWAY_URL";   // e.g. "smart-clinic-xxxx.up.railway.app"
-// ─────────────────────────────────────────────────────────────────────────────
+const char* BACKEND_HOST = "octocare-production.up.railway.app";
 
 const int    BACKEND_PORT = 443;
 const char*  INGEST_PATH  = "/sensors/live/ingest/batch";

@@ -318,6 +318,7 @@ class AppStringsAr {
     'bt_bytes_received': 'بايت مستلمة',
     'wifi_mobile_hint': 'يجب أن يكون الهاتف على نفس شبكة Wi‑Fi/ال hotspot مثل ESP32. أدخل IP الـ ESP32 من Serial Monitor ثم Connect. BPM والحرارة وECG وEMG وGSR تصل عبر WiFi.',
     'wifi_web_hint': 'المتصفح لا يتصل مباشرة بـ ESP32 عبر TCP. على الكمبيوتر (نفس Wi‑Fi): python backend/tools/esp32_tcp_bridge.py --esp32 IP_ESP32 ثم Connect. واجهة العيادة تبقى عبر Cloudflare.',
+    'wifi_cloud_hint': 'وضع السحابة: ESP32 يرسل البيانات للسيرفر. الهاتف يمكنه استخدام بيانات الجوال — لا حاجة لـ IP الـ ESP32. شغّل hotspot الأوبو ليتصل ESP32 بالإنترنت.',
     'wifi_no_data_hint': 'لا توجد بيانات من ESP32 بعد. تحقق من الطاقة وUART واتصال WiFi في Serial Monitor.',
     'wifi_disconnected': 'انقطع اتصال ESP32 WiFi. اضغط إعادة الاتصال أو Connect.',
     'esp32_ip_label': 'عنوان IP للـ ESP32',

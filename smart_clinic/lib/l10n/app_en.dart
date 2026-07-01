@@ -318,6 +318,7 @@ class AppStringsEn {
     'bt_bytes_received': 'Bytes received',
     'wifi_mobile_hint': 'Phone must be on the same Wi‑Fi/hotspot as the ESP32. Enter the ESP32 IP from its Serial Monitor, then Connect. Live BPM, temperature, ECG, EMG, and GSR stream over WiFi.',
     'wifi_web_hint': 'Web cannot open a direct TCP socket to the ESP32. On your PC (same Wi‑Fi as ESP32), run: python backend/tools/esp32_tcp_bridge.py --esp32 YOUR_ESP32_IP then Connect here. Clinic API still uses Cloudflare as usual.',
+    'wifi_cloud_hint': 'Cloud mode: ESP32 sends data to the online server. Your phone can use mobile data — no ESP32 IP needed. Turn on the Oppo hotspot so the ESP32 has internet.',
     'wifi_no_data_hint': 'No data from ESP32 yet. Check Arduino + ESP32 power, UART wiring, and that WiFi connected on ESP32 Serial Monitor.',
     'wifi_disconnected': 'ESP32 WiFi link lost. Tap Reconnect or Connect again.',
     'esp32_ip_label': 'ESP32 IP address',

@@ -49,3 +49,5 @@ class _WebSocketWifiSensorTransport implements WifiSensorTransport {
 }
 
 WifiSensorTransport createWifiSensorTransport() => _WebSocketWifiSensorTransport();
+
+WifiSensorTransport createCloudWifiSensorTransport() => createWifiSensorTransport();

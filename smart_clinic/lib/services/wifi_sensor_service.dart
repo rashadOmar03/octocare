@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/api_config.dart';
+import '../config/api_config.dart';
 import 'sensor_line_parser.dart';
 import 'sensor_reading.dart';
 import 'wifi_sensor_transport.dart';
@@ -66,20 +67,26 @@ class WifiSensorService {
   Future<void> connect({required String host, int port = defaultPort}) async {
     await disconnect();
     final trimmedHost = host.trim();
-    if (!kIsWeb && trimmedHost.isEmpty) {
+    final useCloudLive = ApiConfig.useCloud;
+
+    if (!kIsWeb && !useCloudLive && trimmedHost.isEmpty) {
       throw Exception('Enter the ESP32 IP address from its Serial Monitor.');
     }
 
-    await saveConnectionSettings(host: trimmedHost, port: port);
+    if (!useCloudLive) {
+      await saveConnectionSettings(host: trimmedHost, port: port);
+    }
 
-    _transport = createWifiSensorTransport();
+    _transport = (kIsWeb || useCloudLive) && !kIsWeb
+        ? createCloudWifiSensorTransport()
+        : createWifiSensorTransport();
     _buffer = '';
     _bytesReceived = 0;
     _lastRawLine = null;
     _lastEmittedLine = null;
 
-    if (kIsWeb) {
-      _connectedLabel = 'WebSocket (${Uri.parse(ApiConfig.url).host})';
+    if (kIsWeb || useCloudLive) {
+      _connectedLabel = 'Cloud (${Uri.parse(ApiConfig.url).host})';
       await _transport!.connect(
         host: trimmedHost,
         port: port,

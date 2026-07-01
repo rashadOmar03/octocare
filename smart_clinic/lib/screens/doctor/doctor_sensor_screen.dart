@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../config/api_config.dart';
 import '../../l10n/localization.dart';
 import '../../services/api_service.dart';
 import '../../services/sensor_reading.dart';
@@ -213,7 +214,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
     final host = _hostController.text.trim();
     final port = int.tryParse(_portController.text.trim()) ?? WifiSensorService.defaultPort;
 
-    if (!kIsWeb && host.isEmpty) {
+    if (!kIsWeb && !ApiConfig.useCloud && host.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.tr('esp32_ip_required')),
@@ -506,7 +507,13 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                           ),
                           if (!_isConnected) ...[
                             const SizedBox(height: 16),
-                            if (!kIsWeb)
+                            if (ApiConfig.useCloud)
+                              Text(
+                                AppLocalizations.tr('wifi_cloud_hint'),
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: const Color(0xFF1565C0)),
+                              ),
+                            if (ApiConfig.useCloud) const SizedBox(height: 12),
+                            if (!kIsWeb && !ApiConfig.useCloud)
                               TextField(
                                 controller: _hostController,
                                 decoration: InputDecoration(
@@ -517,8 +524,8 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                                 ),
                                 keyboardType: TextInputType.number,
                               ),
-                            if (!kIsWeb) const SizedBox(height: 12),
-                            if (!kIsWeb)
+                            if (!kIsWeb && !ApiConfig.useCloud) const SizedBox(height: 12),
+                            if (!kIsWeb && !ApiConfig.useCloud)
                               TextField(
                                 controller: _portController,
                                 decoration: InputDecoration(
