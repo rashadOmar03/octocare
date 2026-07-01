@@ -577,9 +577,17 @@ if WEB_BUILD.exists():
         "version.json",
     }
 
+    _API_PREFIXES = (
+        "auth/", "patients/", "appointments/", "records/", "prescriptions/",
+        "ai/", "sensors/", "reports/", "admin/", "receptionist/", "doctors/",
+        "reviews/", "uploads/", "api/", "docs", "openapi.json", "redoc",
+    )
+
     @app.get("/{full_path:path}")
     async def serve_flutter(request: Request, full_path: str):
         clean_path = full_path.split("?", 1)[0]
+        if clean_path.startswith(_API_PREFIXES) or clean_path in ("docs", "openapi.json", "redoc"):
+            raise HTTPException(status_code=404, detail="Not found")
         file_path = WEB_BUILD / clean_path
         is_fallback = not file_path.is_file()
         target = WEB_BUILD / "index.html" if is_fallback else file_path

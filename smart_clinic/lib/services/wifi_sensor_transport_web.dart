@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'wifi_sensor_transport.dart';
+import 'wifi_sensor_transport_cloud.dart';
 
 class _WebSocketWifiSensorTransport implements WifiSensorTransport {
   WebSocketChannel? _channel;
@@ -50,4 +51,4 @@ class _WebSocketWifiSensorTransport implements WifiSensorTransport {
 
 WifiSensorTransport createWifiSensorTransport() => _WebSocketWifiSensorTransport();
 
-WifiSensorTransport createCloudWifiSensorTransport() => createWifiSensorTransport();
+WifiSensorTransport createCloudWifiSensorTransport() => CloudPollWifiSensorTransport();

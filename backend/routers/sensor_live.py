@@ -70,6 +70,14 @@ async def ingest_live_sensor_batch(payload: dict = Body(...)):
     return {"ok": True, "clients": len(_live_clients), "sent": sent}
 
 
+@router.get("/live/latest")
+def live_sensor_latest():
+    return {
+        "line": _latest_line,
+        "has_data": bool(_latest_line),
+    }
+
+
 @router.get("/live/status")
 def live_sensor_status():
     return {

@@ -5,13 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/api_config.dart';
-import '../config/api_config.dart';
 import 'sensor_line_parser.dart';
 import 'sensor_reading.dart';
 import 'wifi_sensor_transport.dart';
 import 'wifi_sensor_transport_stub.dart'
     if (dart.library.io) 'wifi_sensor_transport_io.dart'
     if (dart.library.html) 'wifi_sensor_transport_web.dart';
+import 'wifi_sensor_transport_cloud.dart';
 
 class WifiSensorService {
   WifiSensorService._();
@@ -77,8 +77,8 @@ class WifiSensorService {
       await saveConnectionSettings(host: trimmedHost, port: port);
     }
 
-    _transport = (kIsWeb || useCloudLive) && !kIsWeb
-        ? createCloudWifiSensorTransport()
+    _transport = useCloudLive
+        ? CloudPollWifiSensorTransport()
         : createWifiSensorTransport();
     _buffer = '';
     _bytesReceived = 0;
