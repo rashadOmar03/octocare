@@ -155,10 +155,11 @@ class _AiChatPanelState extends State<AiChatPanel> {
       setState(() {});
       return;
     }
+    final hasArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(text);
     try {
       await _voice.speakText(
         text,
-        language: AppLocalizations.currentLocale,
+        language: hasArabic ? 'ar' : 'en',
         messageIndex: index,
       );
       if (mounted) setState(() {});

@@ -26,6 +26,16 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "") or os.getenv("LM_API_KEY", "")
 GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3")
 
 
+def _normalize_language(code: str | None, fallback: str = "en") -> str:
+    """Map Whisper/Groq language codes to ar or en."""
+    if not code:
+        return fallback
+    lowered = code.lower().strip()
+    if lowered.startswith("ar") or "arab" in lowered:
+        return "ar"
+    return "en"
+
+
 def _groq_whisper_available() -> bool:
     """Groq Whisper is available if we have an API key and the base URL points to Groq."""
     if not GROQ_API_KEY or GROQ_API_KEY in ("lm-studio", "ollama"):
@@ -59,6 +69,8 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
         with open(tmp_path, "rb") as f:
             files = {"file": (f"audio{suffix}", f, "audio/webm")}
             data: dict = {"model": GROQ_WHISPER_MODEL, "response_format": "json"}
+            # Omit language so Whisper auto-detects Arabic vs English from speech.
+            # Forcing UI locale caused Arabic speech to be transcribed in English.
             if language in ("ar", "en"):
                 data["language"] = language
 
@@ -73,7 +85,7 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
             body = resp.json()
 
         transcript = (body.get("text") or "").strip()
-        detected = body.get("language") or language or "en"
+        detected = _normalize_language(body.get("language"), fallback=language or "en")
         return {
             "transcript": transcript,
             "language": detected,
@@ -140,7 +152,7 @@ def transcribe_file(
     transcript, info = _run(vad_filter=True)
     if not transcript:
         transcript, info = _run(vad_filter=False)
-    detected = info.language or lang or "en"
+    detected = _normalize_language(getattr(info, "language", None), fallback=lang or "en")
     return {
         "transcript": transcript,
         "language": detected,

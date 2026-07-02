@@ -11,7 +11,7 @@ flutter build web --release
 $backendWeb = Join-Path (Join-Path $root "backend") "web"
 Write-Host "Copying web build to backend/web for Railway..." -ForegroundColor Cyan
 if (Test-Path $backendWeb) { Remove-Item $backendWeb -Recurse -Force }
-Copy-Item -Path (Join-Path (Get-Location) "build" "web") -Destination $backendWeb -Recurse
+Copy-Item -Path (Join-Path (Join-Path (Get-Location) "build") "web") -Destination $backendWeb -Recurse
 
 Write-Host ""
 Write-Host "Done. Web output: smart_clinic/build/web" -ForegroundColor Green
