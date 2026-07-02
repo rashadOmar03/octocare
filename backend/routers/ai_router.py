@@ -84,22 +84,29 @@ def _call_model(
     temperature: float = 0.3,
     max_tokens: int = 2048,
     history: list[dict] | None = None,
+    json_mode: bool = False,
 ) -> str | None:
+    import logging
+    logger = logging.getLogger("ai_router")
     try:
         client = _get_client()
         messages = [{"role": "system", "content": system_prompt}]
         if history:
             messages.extend(history)
         messages.append({"role": "user", "content": user_message})
-        response = client.chat.completions.create(
-            model=LM_STUDIO_MODEL,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        kwargs: dict = {
+            "model": LM_STUDIO_MODEL,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        response = client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content
         return content if content else None
-    except Exception:
+    except Exception as e:
+        logger.error(f"LLM call failed: {e}")
         return None
 
 
@@ -840,7 +847,7 @@ async def extract_medical_info(
     lang = detect_input_language(transcript)
     prefix = EXTRACTION_USER_PREFIX.get(lang, EXTRACTION_USER_PREFIX["en"])
     user_message = prefix + transcript
-    raw = _call_model(EXTRACTION_SYSTEM_PROMPT, user_message, temperature=0, max_tokens=2048)
+    raw = _call_model(EXTRACTION_SYSTEM_PROMPT, user_message, temperature=0, max_tokens=4096, json_mode=True)
 
     extracted = None
     source = "mock"
