@@ -120,10 +120,22 @@ class ReceptionistService {
     return Appointment.fromJson(Map<String, dynamic>.from(response));
   }
 
-  Future<List<Appointment>> getQueue({String? doctorId}) async {
+  Future<List<Appointment>> getQueue({String? doctorId, String? date}) async {
     var endpoint = '/receptionist/queue';
+    final params = <String>[];
     if (doctorId != null && doctorId.isNotEmpty) {
-      endpoint += '?doctor_id=$doctorId';
+      params.add('doctor_id=$doctorId');
+    }
+    if (date != null && date.isNotEmpty) {
+      params.add('date=$date');
+    } else {
+      final now = DateTime.now();
+      final today =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      params.add('date=$today');
+    }
+    if (params.isNotEmpty) {
+      endpoint += '?${params.join('&')}';
     }
     final response = await _api.get(endpoint);
     final list = response is List ? response : (response['results'] ?? []);

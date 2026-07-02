@@ -27,6 +27,11 @@ class _ReceptionistHomeScreenState extends State<ReceptionistHomeScreen> {
   String? _loadError;
   bool _isLoading = true;
 
+  String get _todayStr {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -40,7 +45,7 @@ class _ReceptionistHomeScreenState extends State<ReceptionistHomeScreen> {
     });
     try {
       _dashboard = await _receptionistService.getDashboard();
-      _queuePreview = await _receptionistService.getQueue();
+      _queuePreview = await _receptionistService.getQueue(date: _todayStr);
       await _avatarKey.currentState?.refresh();
     } catch (e) {
       _loadError = extractApiError(e);

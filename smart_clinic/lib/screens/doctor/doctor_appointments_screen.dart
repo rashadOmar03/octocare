@@ -99,14 +99,8 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen> wit
       _completed = all.where((a) => a.status == 'completed').toList();
 
       if (_statusFilter == 'arrived') {
-        _filtered = all
-            .where((a) => a.status == 'arrived' && a.isToday)
-            .toList()
-          ..sort((a, b) {
-            final dateCompare = (a.date ?? '').compareTo(b.date ?? '');
-            if (dateCompare != 0) return dateCompare;
-            return (a.queueNumber ?? 999).compareTo(b.queueNumber ?? 999);
-          });
+        _filtered = await _service.getDoctorQueue(date: todayStr);
+        _filtered.sort((a, b) => (a.queueNumber ?? 999).compareTo(b.queueNumber ?? 999));
       } else if (_statusFilter == 'confirmed') {
         _filtered = all
             .where((a) => a.date == todayStr && a.status == 'confirmed')

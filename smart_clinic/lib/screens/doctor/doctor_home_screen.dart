@@ -40,9 +40,19 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       _loadError = null;
     });
     try {
+      final now = DateTime.now();
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final all = await _appointmentService.getTodayAppointments();
+      final arrivedQueue = await _appointmentService.getDoctorQueue(date: todayStr);
       const activeStatuses = {'pending', 'confirmed', 'arrived'};
-      _todayAppointments = all.where((a) => activeStatuses.contains(a.status)).toList()
+      final fromToday = all.where((a) => activeStatuses.contains(a.status));
+      final merged = <String, Appointment>{
+        for (final a in fromToday)
+          if (a.id != null) a.id!: a,
+        for (final a in arrivedQueue)
+          if (a.id != null) a.id!: a,
+      };
+      _todayAppointments = merged.values.toList()
         ..sort((a, b) {
           final aArrived = a.status == 'arrived';
           final bArrived = b.status == 'arrived';

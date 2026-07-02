@@ -37,6 +37,7 @@ from audit_service import log_audit
 from otp_service import create_and_send_otp
 from email_service import send_patient_welcome_email
 from profile_utils import profile_personal_info_complete
+from clinic_time import clinic_today
 
 router = APIRouter()
 
@@ -252,7 +253,7 @@ def receptionist_dashboard(
     current_user: User = Depends(require_role("receptionist", "admin")),
     db: Session = Depends(get_db),
 ):
-    today = date.today()
+    today = clinic_today()
     today_q = db.query(Appointment).filter(Appointment.date == today)
 
     today_count = today_q.filter(
@@ -373,7 +374,7 @@ def list_receptionist_appointments(
     if date_filter:
         query = query.filter(Appointment.date == date_filter)
     else:
-        query = query.filter(Appointment.date == date.today())
+        query = query.filter(Appointment.date == clinic_today())
     if status_filter:
         query = query.filter(Appointment.status == status_filter)
     appointments = query.order_by(Appointment.time_slot.asc()).all()
@@ -466,14 +467,16 @@ def book_appointment_for_patient(
 @router.get("/queue", response_model=list)
 def get_queue(
     doctor_id: str = Query(None),
+    queue_date: date = Query(None, alias="date"),
     current_user: User = Depends(require_role("receptionist", "admin")),
     db: Session = Depends(get_db),
 ):
+    target_date = queue_date or clinic_today()
     query = (
         db.query(Appointment)
         .filter(
             Appointment.status == "arrived",
-            Appointment.date == date.today(),
+            Appointment.date == target_date,
         )
     )
     if doctor_id:
@@ -526,7 +529,7 @@ def list_payable_appointments(
 ):
     """Appointments that can still be marked as paid (no paid record yet)."""
     auto_cancel_expired_appointments(db)
-    today = date.today()
+    today = clinic_today()
     max_date = today + timedelta(days=days_ahead)
     appointments = (
         db.query(Appointment)

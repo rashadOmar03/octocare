@@ -61,6 +61,13 @@ class AppointmentService {
     return (response['slots'] as List? ?? []).map((e) => <String, dynamic>{'time': e.toString(), 'available': true}).toList();
   }
 
+  Future<List<Appointment>> getDoctorQueue({String? date}) async {
+    final now = DateTime.now();
+    final today = date ??
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    return getAppointments(status: 'arrived', date: today);
+  }
+
   Future<Map<String, dynamic>?> getMyQueueStatus() async {
     try {
       final response = await _api.get('/appointments/my-queue');

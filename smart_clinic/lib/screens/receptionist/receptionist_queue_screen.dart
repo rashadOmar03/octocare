@@ -44,7 +44,7 @@ class _ReceptionistQueueScreenState extends State<ReceptionistQueueScreen> {
       _loadError = null;
     });
     try {
-      _queue = await _receptionistService.getQueue(doctorId: _selectedDoctorId);
+      _queue = await _receptionistService.getQueue(doctorId: _selectedDoctorId, date: _todayStr);
       _doctors = await _receptionistService.getDoctors();
     } catch (e) {
       _loadError = extractApiError(e);

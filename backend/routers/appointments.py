@@ -22,6 +22,7 @@ from appointment_rules import (
     require_paid_arrived_appointment,
 )
 from audit_service import log_audit
+from clinic_time import clinic_today
 from access_control import (
     assert_appointment_read,
     assert_appointment_patient_action,
@@ -134,7 +135,7 @@ def my_queue_status(
     if not profile:
         return {"in_queue": False}
 
-    today = date.today()
+    today = clinic_today()
 
     if current_user.role == "doctor":
         doctor = db.query(Doctor).filter(Doctor.profile_id == profile.id).first()
@@ -797,7 +798,7 @@ def mark_arrived(
             detail="Patient must complete payment before marking as arrived.",
         )
 
-    today = date.today()
+    today = clinic_today()
     if appointment.date != today:
         ensure_doctor_slot_free(db, appointment.doctor_id, today, appointment.time_slot)
         original = appointment.date
