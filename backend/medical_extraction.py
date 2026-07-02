@@ -1049,6 +1049,59 @@ def _refine_extraction(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+_NEGATION_PATTERNS_EN = re.compile(
+    r"\b(?:no|not|denies|denied|without|absent|negative for|rules?\s*out|"
+    r"never|nor|free of|lack of|doesn'?t have|don'?t have|did not have)\b",
+    re.IGNORECASE,
+)
+_NEGATION_PATTERNS_AR = re.compile(
+    r"(?:لا |ما |مفيش|مافيش|بدون|عدم|ينفي|نفى|ما عندو|ما عندها|مش عنده|مش عندها|"
+    r"ما فيش|لا يوجد|لا توجد|ليس لديه|ليس لديها|من غير)",
+)
+
+_SYMPTOM_SYNONYMS: dict[str, list[str]] = {
+    "fever": ["fever", "pyrexia", "febrile", "حمى", "حرارة", "سخونية", "سخونيه"],
+    "cough": ["cough", "coughing", "كحة", "كحه", "سعال"],
+    "vomiting": ["vomiting", "vomit", "emesis", "ترجيع", "قيء", "استفراغ", "قىء"],
+    "nausea": ["nausea", "nauseated", "غثيان"],
+    "headache": ["headache", "cephalalgia", "صداع", "وجع راس", "وجع رأس"],
+    "diarrhea": ["diarrhea", "diarrhoea", "إسهال", "اسهال"],
+    "dyspnea": ["dyspnea", "shortness of breath", "sob", "ضيق تنفس", "ضيق نفس"],
+    "chest_pain": ["chest pain", "ألم صدر", "وجع صدر"],
+    "abdominal_pain": ["abdominal pain", "stomach pain", "ألم بطن", "وجع بطن", "مغص"],
+}
+
+
+def _symptom_is_negated(symptom_name: str, source_text: str) -> bool:
+    """Check if a symptom was explicitly negated in the source text."""
+    name_lower = symptom_name.lower().strip()
+    text_lower = source_text.lower()
+
+    all_terms = [name_lower]
+    for _group, synonyms in _SYMPTOM_SYNONYMS.items():
+        if name_lower in [s.lower() for s in synonyms]:
+            all_terms = [s.lower() for s in synonyms]
+            break
+
+    for term in all_terms:
+        for pattern in [_NEGATION_PATTERNS_EN, _NEGATION_PATTERNS_AR]:
+            for match in pattern.finditer(text_lower):
+                neg_pos = match.end()
+                window = text_lower[neg_pos:neg_pos + 40]
+                if term in window:
+                    positive_before = text_lower[max(0, match.start() - 30):match.start()]
+                    if not re.search(r"\b(has|have|with|complain|يشتكي|عنده|عندها)\b", positive_before, re.IGNORECASE):
+                        return True
+    return False
+
+
+def _filter_negated_symptoms(symptoms: list[dict[str, Any]], source_text: str) -> list[dict[str, Any]]:
+    """Remove symptoms that were explicitly negated in the source text."""
+    if not source_text:
+        return symptoms
+    return [s for s in symptoms if not _symptom_is_negated(s.get("name", ""), source_text)]
+
+
 def normalize_extraction(raw: dict[str, Any], source_text: str | None = None) -> dict[str, Any]:
     """Normalize LLM output into consistent structured EHR payload."""
     data = dict(raw or {})
@@ -1067,6 +1120,8 @@ def normalize_extraction(raw: dict[str, Any], source_text: str | None = None) ->
         data["prescription"] = data.pop("medications")
 
     symptoms = normalize_symptoms(data.get("symptoms", []))
+    if source_text:
+        symptoms = _filter_negated_symptoms(symptoms, source_text)
     data["symptoms"] = symptoms
 
     diagnoses_raw = data.get("diagnoses") or []

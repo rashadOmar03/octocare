@@ -263,6 +263,12 @@ _FORMAT_RULES = (
     "- Separate sections with a blank line\n"
     "- Be conversational and friendly, like a helpful human assistant\n"
     "- Keep answers focused and concise\n"
+    "\n\nGROUNDING RULES (critical — never break these):\n"
+    "- ONLY state facts that exist in the CLINIC DATA section below\n"
+    "- If the data says 0 results, or empty list, or NOT FOUND — say so clearly\n"
+    "- NEVER invent patient names, doctor names, appointments, or numbers\n"
+    "- If patient search returns NO results, say 'not found in the system'\n"
+    "- If you don't have data to answer, say you don't have that information\n"
 )
 
 _LANG_RULE = (
@@ -320,9 +326,11 @@ _AGENT_SYSTEM: dict[str, str] = {
         + _FORMAT_RULES + _LANG_RULE
     ),
     "doctor": (
-        "You are a clinic assistant for doctors at Smart Clinic.\n"
+        "You are a personal clinic assistant for the LOGGED-IN doctor at Smart Clinic.\n"
         "You have access to REAL clinic data below. Use ONLY this data to answer.\n\n"
         "RULES:\n"
+        "- When asked about 'my schedule' or 'my patients', only show THIS doctor's data\n"
+        "- Do NOT show other doctors' schedules unless explicitly asked\n"
         "- Help with schedule, queue, and operational questions\n"
         "- Summarise patient reviews honestly from the data\n"
         "- General clinical info is for reference only, all decisions are yours\n"
@@ -570,11 +578,18 @@ def _fetch_agent_facts(
             if term:
                 results = tool_search_patient(db, term)
                 facts["patient_search_results"] = results
-                facts["patient_search_note"] = (
-                    f"Showing summary cards for patients matching '{term}'. "
-                    "Full medical records, prescriptions, and documents are available "
-                    "in the Admin → Patient detail screen — not shown here for privacy."
-                )
+                if not results:
+                    facts["patient_search_note"] = (
+                        f"NO PATIENTS FOUND matching '{term}'. "
+                        "This patient does NOT exist in the system. "
+                        "Do NOT invent or hallucinate patient data. Tell the user no match was found."
+                    )
+                else:
+                    facts["patient_search_note"] = (
+                        f"Showing summary cards for patients matching '{term}'. "
+                        "Full medical records, prescriptions, and documents are available "
+                        "in the Admin → Patient detail screen — not shown here for privacy."
+                    )
             else:
                 facts["patient_search_note"] = (
                     "Please include the patient's name in your query, "
@@ -586,7 +601,13 @@ def _fetch_agent_facts(
         term = _extract_search_term(message)
         if term:
             from agent_tools import tool_search_patient
-            facts["patient_search_results"] = tool_search_patient(db, term)
+            results = tool_search_patient(db, term)
+            facts["patient_search_results"] = results
+            if not results:
+                facts["patient_search_note"] = (
+                    f"NO PATIENTS FOUND matching '{term}'. "
+                    "This patient does NOT exist in the system. Do NOT invent patient data."
+                )
         else:
             facts["patient_search_note"] = (
                 "Please include the patient's name in your query."

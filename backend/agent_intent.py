@@ -104,14 +104,18 @@ _AVAILABILITY_KW = {
 _MY_APTS_KW = {
     # English
     "my appointment", "my booking", "my visit", "my upcoming",
+    "do i have", "am i booked", "my schedule", "my next",
+    "when is my", "i have an appointment", "i am booked",
     # Formal Arabic
     "مواعيدي", "حجوزاتي", "زياراتي", "مواعيدي القادمة",
+    "هل عندي", "هل لدي",
     # Egyptian Arabic
     "حجزي", "حجزاتي", "مواعيدي", "ميعادي",
     "انا حاجز", "أنا حاجز", "أنا حاجزه", "انا حاجزة",
     "حجزت امتى", "ميعادي امتى", "موعدي امتى",
     "حجوزاتي", "الحجز بتاعي", "الميعاد بتاعي",
     "فين حجزي", "فين ميعادي", "فين موعدي",
+    "عندي ميعاد", "عندي حجز", "انا حاجز عند",
 }
 
 _REVENUE_KW = {
@@ -274,14 +278,21 @@ _MY_REVIEWS_KW = {
 _ADMIN_OVERVIEW_KW = {
     # English
     "total", "overview", "summary", "dashboard", "overall", "all stats",
+    "how many patients", "how many doctors", "registered patients",
+    "total patients", "total doctors", "in the system", "in the clinic",
+    "patient count", "doctor count",
     # Formal Arabic
     "إجمالي", "ملخص", "نظرة عامة", "كل الإحصائيات",
+    "كم عدد المرضى", "كم عدد الاطباء", "كم مريض", "كم طبيب",
+    "عدد المرضى", "عدد الأطباء",
     # Egyptian Arabic
     "الإجمالي", "المجموع", "ملخص عام",
     "ورّيني كل حاجة", "وريني كل حاجه", "وريني كل حاجة",
     "ايه الوضع العام", "إيه الوضع العام",
     "احصائيات", "الإحصائيات", "الأرقام", "الارقام",
     "كل الأرقام", "تقرير", "التقرير",
+    "كام مريض مسجل", "كام دكتور عندنا", "عدد المرضى المسجلين",
+    "عدد الأطباء المسجلين", "كم عدد", "المرضى والاطباء",
 }
 
 
@@ -325,6 +336,8 @@ def detect_intent(message: str, role: str) -> list[str]:
     # ── Patient only ───────────────────────────────────────────────────────────
     if role == "patient" and _match(message, _MY_APTS_KW):
         intents.append("my_appointments")
+        if "doctor_availability" in intents:
+            intents.remove("doctor_availability")
 
     # ── Receptionist & admin ───────────────────────────────────────────────────
     if role in ("receptionist", "admin"):
@@ -345,6 +358,9 @@ def detect_intent(message: str, role: str) -> list[str]:
     if role == "doctor":
         if _match(message, _MY_SCHEDULE_KW) or _match(message, _STATS_KW):
             intents.append("my_schedule")
+            for remove_intent in ("doctor_availability", "clinic_info", "doctor_search"):
+                if remove_intent in intents:
+                    intents.remove(remove_intent)
         if _match(message, _MY_REVIEWS_KW):
             intents.append("my_reviews")
         if _match(message, _STATS_KW):
