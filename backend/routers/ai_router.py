@@ -682,21 +682,24 @@ async def agent_chat(
     # 4. Build system prompt (no per-language split; language rule is in the prompt)
     base_prompt = _AGENT_SYSTEM.get(role, _AGENT_SYSTEM["patient"])
     facts_block = _facts_to_prompt(facts)
-    system_prompt = (
-        f"{base_prompt}\n\n"
-        "=== CLINIC DATA (from live database — use ONLY these facts) ===\n"
+    system_prompt = base_prompt
+
+    # Inject facts into user message for stronger grounding (LLMs follow user context better)
+    augmented_message = (
+        f"[SYSTEM DATABASE QUERY RESULTS - THIS IS THE ONLY TRUTH]:\n"
         f"{facts_block}\n"
-        "=== END CLINIC DATA ===\n\n"
-        "REMINDER: Every fact in your answer MUST come from the CLINIC DATA above. "
-        "Do not add any numbers or details not present above."
+        f"[END DATABASE RESULTS]\n\n"
+        f"IMPORTANT: Answer the following question using ONLY the database results above. "
+        f"Do NOT make up any numbers or facts. If the data shows total_patients: 12, say 12.\n\n"
+        f"User question: {data.message}"
     )
 
     # 5. Trim history to last 10 message pairs (20 messages) to fit context window
     trimmed = history[-20:] if len(history) > 20 else history
 
-    # 6. Call Gemma with history
+    # 6. Call LLM with history
     response_text = _call_model(
-        system_prompt, data.message,
+        system_prompt, augmented_message,
         temperature=0.2, max_tokens=1024,
         history=trimmed,
     )
