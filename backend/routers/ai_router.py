@@ -263,12 +263,15 @@ _FORMAT_RULES = (
     "- Separate sections with a blank line\n"
     "- Be conversational and friendly, like a helpful human assistant\n"
     "- Keep answers focused and concise\n"
-    "\n\nGROUNDING RULES (critical — never break these):\n"
-    "- ONLY state facts that exist in the CLINIC DATA section below\n"
-    "- If the data says 0 results, or empty list, or NOT FOUND — say so clearly\n"
+    "\n\nGROUNDING RULES (MANDATORY — breaking these = critical system failure):\n"
+    "- You MUST answer ONLY using data from the CLINIC DATA section below\n"
+    "- Every number you state MUST come directly from CLINIC DATA\n"
+    "- If CLINIC DATA says total_patients: 5, you say 5 — not 5000, not 50\n"
+    "- NEVER add percentages, breakdowns, or details not explicitly in the data\n"
+    "- If the data says 0 results, empty list, or NOT FOUND — say exactly that\n"
     "- NEVER invent patient names, doctor names, appointments, or numbers\n"
-    "- If patient search returns NO results, say 'not found in the system'\n"
-    "- If you don't have data to answer, say you don't have that information\n"
+    "- If you don't have data to answer a question, say 'I don't have that information'\n"
+    "- DO NOT hallucinate or make up any data under any circumstances\n"
 )
 
 _LANG_RULE = (
@@ -311,7 +314,8 @@ _AGENT_SYSTEM: dict[str, str] = {
     ),
     "receptionist": (
         "You are a clinic operations assistant for receptionists at Smart Clinic.\n"
-        "You have access to REAL clinic data below. Use ONLY this data to answer.\n\n"
+        "You have access to REAL clinic data in the CLINIC DATA section below.\n"
+        "Use ONLY facts from that section. NEVER invent names, numbers, or details.\n\n"
         "RULES:\n"
         "- Give clear operational insights from the provided numbers\n"
         "- Highlight urgent items (pending payments, long queues, cancellations)\n"
@@ -327,7 +331,8 @@ _AGENT_SYSTEM: dict[str, str] = {
     ),
     "doctor": (
         "You are a personal clinic assistant for the LOGGED-IN doctor at Smart Clinic.\n"
-        "You have access to REAL clinic data below. Use ONLY this data to answer.\n\n"
+        "You have access to REAL clinic data in the CLINIC DATA section below.\n"
+        "Use ONLY facts from that section. NEVER invent names, numbers, or details.\n\n"
         "RULES:\n"
         "- When asked about 'my schedule' or 'my patients', only show THIS doctor's data\n"
         "- Do NOT show other doctors' schedules unless explicitly asked\n"
@@ -341,14 +346,17 @@ _AGENT_SYSTEM: dict[str, str] = {
     ),
     "admin": (
         "You are a clinic management assistant for administrators at Smart Clinic.\n"
-        "You have access to REAL clinic data below. Use ONLY this data.\n\n"
-        "IMPORTANT LIMITATIONS:\n"
+        "You have access to REAL clinic data in the CLINIC DATA section below.\n\n"
+        "ABSOLUTE RULES (violation = system failure):\n"
+        "- ONLY use numbers, names, and facts from the CLINIC DATA section below\n"
+        "- If CLINIC DATA says total_patients: 12, you say 12. NEVER invent different numbers\n"
+        "- If CLINIC DATA has no info on a topic, say 'I don't have that data'\n"
+        "- NEVER make up statistics, percentages, or breakdowns not in the data\n"
         "- You can search for specific patients by name when asked\n"
-        "- You will NOT dump all patient records at once, that would violate privacy\n"
-        "  (Use the Admin patient detail screen for full individual records)\n"
+        "- You will NOT dump all patient records at once (privacy)\n"
         "- You can compare doctors, analyse revenue, review audit logs\n"
-        "- You cannot modify any data through this chat, use the admin panel for changes\n"
-        "- All numbers and names come from the live database, never invent any"
+        "- You cannot modify any data through this chat\n"
+        "- If patient search returns empty, say 'patient not found' — do NOT invent a match"
         + _FORMAT_RULES + _LANG_RULE
     ),
 }
@@ -674,7 +682,14 @@ async def agent_chat(
     # 4. Build system prompt (no per-language split; language rule is in the prompt)
     base_prompt = _AGENT_SYSTEM.get(role, _AGENT_SYSTEM["patient"])
     facts_block = _facts_to_prompt(facts)
-    system_prompt = f"{base_prompt}\n\n--- CLINIC DATA ---\n{facts_block}\n--- END CLINIC DATA ---"
+    system_prompt = (
+        f"{base_prompt}\n\n"
+        "=== CLINIC DATA (from live database — use ONLY these facts) ===\n"
+        f"{facts_block}\n"
+        "=== END CLINIC DATA ===\n\n"
+        "REMINDER: Every fact in your answer MUST come from the CLINIC DATA above. "
+        "Do not add any numbers or details not present above."
+    )
 
     # 5. Trim history to last 10 message pairs (20 messages) to fit context window
     trimmed = history[-20:] if len(history) > 20 else history
@@ -682,7 +697,7 @@ async def agent_chat(
     # 6. Call Gemma with history
     response_text = _call_model(
         system_prompt, data.message,
-        temperature=0.5, max_tokens=1024,
+        temperature=0.2, max_tokens=1024,
         history=trimmed,
     )
 
