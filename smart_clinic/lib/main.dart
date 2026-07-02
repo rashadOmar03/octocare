@@ -126,6 +126,17 @@ class SmartClinicApp extends StatelessWidget {
           GlobalCupertinoLocalizations.delegate,
         ],
         initialRoute: initialRoute,
+        builder: (context, child) {
+          final mediaQuery = MediaQuery.of(context);
+          final clampedScaler = mediaQuery.textScaler.clamp(
+            minScaleFactor: 0.9,
+            maxScaleFactor: 1.15,
+          );
+          return MediaQuery(
+            data: mediaQuery.copyWith(textScaler: clampedScaler),
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         routes: {
           AppRoutes.login: (_) => const LoginScreen(),
           AppRoutes.register: (_) => const RegisterScreen(),

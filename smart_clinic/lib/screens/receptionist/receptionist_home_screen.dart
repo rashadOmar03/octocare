@@ -10,6 +10,7 @@ import '../../services/receptionist_service.dart';
 import '../../models/appointment.dart';
 import '../../utils/time_format.dart';
 import '../../utils/ui_helpers.dart';
+import '../../utils/responsive.dart';
 
 class ReceptionistHomeScreen extends StatefulWidget {
   const ReceptionistHomeScreen({super.key});
@@ -60,7 +61,7 @@ class _ReceptionistHomeScreenState extends State<ReceptionistHomeScreen> {
         child: _isLoading
             ? ListView(children: const [SizedBox(height: 240), Center(child: CircularProgressIndicator())])
             : ListView(
-                padding: const EdgeInsets.all(16),
+                padding: Responsive.pagePadding(context),
                 children: [
                   if (_loadError != null)
                     Card(
@@ -111,7 +112,7 @@ class _ReceptionistHomeScreenState extends State<ReceptionistHomeScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     crossAxisCount: 2,
-                    childAspectRatio: 1.3,
+                    childAspectRatio: Responsive.statGridAspectRatio(context),
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                     children: [

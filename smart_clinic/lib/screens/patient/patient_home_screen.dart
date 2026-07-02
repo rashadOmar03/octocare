@@ -13,6 +13,7 @@ import '../../services/sensor_service.dart';
 import '../../models/appointment.dart';
 import '../../utils/time_format.dart';
 import '../../utils/ui_helpers.dart';
+import '../../utils/responsive.dart';
 import '../../models/sensor_reading.dart';
 
 class PatientHomeScreen extends StatefulWidget {
@@ -90,7 +91,9 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : ListView(
-                padding: const EdgeInsets.all(16),
+                padding: Responsive.pagePadding(context).copyWith(
+                  bottom: Responsive.bottomContentPadding(context, hasFab: true),
+                ),
                 children: [
                   Card(
                     child: Padding(
@@ -175,7 +178,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     crossAxisCount: 2,
-                    childAspectRatio: 1.3,
+                    childAspectRatio: Responsive.statGridAspectRatio(context),
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                     children: [
@@ -264,11 +267,17 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
               ),
       ),
       bottomNavigationBar: const BottomNav(currentIndex: 0, role: 'patient'),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.pushNamed(context, AppRoutes.patientBookAppointment),
-        icon: const Icon(Icons.add),
-        label: Text(AppLocalizations.tr('book_appointment')),
-      ),
+      floatingActionButton: Responsive.isCompact(context)
+          ? FloatingActionButton(
+              onPressed: () => Navigator.pushNamed(context, AppRoutes.patientBookAppointment),
+              tooltip: AppLocalizations.tr('book_appointment'),
+              child: const Icon(Icons.add),
+            )
+          : FloatingActionButton.extended(
+              onPressed: () => Navigator.pushNamed(context, AppRoutes.patientBookAppointment),
+              icon: const Icon(Icons.add),
+              label: Text(AppLocalizations.tr('book_appointment')),
+            ),
     );
   }
 }

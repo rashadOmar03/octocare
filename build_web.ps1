@@ -8,7 +8,7 @@ Set-Location (Join-Path $root "smart_clinic")
 Write-Host "Building Flutter web (release)..." -ForegroundColor Cyan
 flutter build web --release
 
-$backendWeb = Join-Path $root "backend" "web"
+$backendWeb = Join-Path (Join-Path $root "backend") "web"
 Write-Host "Copying web build to backend/web for Railway..." -ForegroundColor Cyan
 if (Test-Path $backendWeb) { Remove-Item $backendWeb -Recurse -Force }
 Copy-Item -Path (Join-Path (Get-Location) "build" "web") -Destination $backendWeb -Recurse

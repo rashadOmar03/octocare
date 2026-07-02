@@ -11,6 +11,7 @@ import '../../services/admin_service.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/notification_icon.dart';
 import '../../widgets/user_avatar.dart';
+import '../../utils/responsive.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -109,7 +110,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           : RefreshIndicator(
               onRefresh: _loadData,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: Responsive.pagePadding(context),
                 children: [
                   if (_loadError != null)
                     Padding(
@@ -147,7 +148,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     crossAxisCount: 2,
-                    childAspectRatio: 1.3,
+                    childAspectRatio: Responsive.statGridAspectRatio(context),
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                     children: [
