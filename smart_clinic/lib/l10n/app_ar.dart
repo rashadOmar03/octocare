@@ -345,6 +345,7 @@ class AppStringsAr {
     'medications': 'الأدوية',
     'no_confirmed_today': 'لا توجد مواعيد مؤكدة لليوم',
     'returned_to_confirmed': 'تم إرجاع المريض إلى قائمة المؤكد',
+    'patient_moved_to_queue': 'تم نقل المريض إلى قائمة الحضور — راجع تبويب "حضر" أو شاشة الطابور',
     'confirm_after_reschedule': 'تأكيد الموعد بعد إعادة الجدولة',
     'select_appointment': 'اختر الموعد',
     'consultation_fee': 'رسوم الكشف',

@@ -80,7 +80,16 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen> wit
       final activeStatuses = {'pending', 'confirmed', 'arrived'};
       _today = all
           .where((a) => a.date == todayStr && activeStatuses.contains(a.status))
-          .toList();
+          .toList()
+        ..sort((a, b) {
+          final aArrived = a.status == 'arrived';
+          final bArrived = b.status == 'arrived';
+          if (aArrived != bArrived) return aArrived ? -1 : 1;
+          if (aArrived && bArrived) {
+            return (a.queueNumber ?? 999).compareTo(b.queueNumber ?? 999);
+          }
+          return (a.timeSlot ?? '').compareTo(b.timeSlot ?? '');
+        });
       _upcoming = all
           .where((a) =>
               (a.status == 'confirmed' || a.status == 'pending' || a.status == 'arrived') &&

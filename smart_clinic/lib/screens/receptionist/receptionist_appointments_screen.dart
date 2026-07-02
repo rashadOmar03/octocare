@@ -222,6 +222,10 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
                 ? () async {
                     try {
                       await _service.markArrived(apt.id!);
+                      if (mounted) {
+                        showSuccessSnackBar(context, AppLocalizations.tr('patient_moved_to_queue'));
+                        _tabController.animateTo(2);
+                      }
                       _loadData();
                     } catch (e) {
                       if (mounted) showErrorSnackBar(context, e);

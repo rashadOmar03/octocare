@@ -345,6 +345,7 @@ class AppStringsEn {
     'medications': 'Medications',
     'no_confirmed_today': 'No confirmed appointments for today',
     'returned_to_confirmed': 'Patient returned to confirmed list',
+    'patient_moved_to_queue': 'Patient moved to waiting queue — check the Arrived tab or Queue screen',
     'confirm_after_reschedule': 'Confirm appointment after rescheduling',
     'select_appointment': 'Select appointment',
     'consultation_fee': 'Consultation fee',

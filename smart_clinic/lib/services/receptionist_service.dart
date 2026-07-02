@@ -84,7 +84,9 @@ class ReceptionistService {
     if (query.trim().isEmpty) return [];
     final response = await _api.get('/receptionist/patients/search?q=${Uri.encodeQueryComponent(query.trim())}');
     final list = response is List ? response : (response['results'] ?? []);
-    return list.map((e) => PatientSearchResult.fromJson(Map<String, dynamic>.from(e))).toList();
+    return List<PatientSearchResult>.from(
+      (list as List).map((e) => PatientSearchResult.fromJson(Map<String, dynamic>.from(e as Map))),
+    );
   }
 
   Future<List<Map<String, dynamic>>> getDoctors() async {
@@ -125,6 +127,8 @@ class ReceptionistService {
     }
     final response = await _api.get(endpoint);
     final list = response is List ? response : (response['results'] ?? []);
-    return list.map((e) => Appointment.fromJson(Map<String, dynamic>.from(e))).toList();
+    return List<Appointment>.from(
+      (list as List).map((e) => Appointment.fromJson(Map<String, dynamic>.from(e as Map))),
+    );
   }
 }

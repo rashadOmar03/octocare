@@ -128,7 +128,9 @@ class _ReceptionistPaymentsScreenState extends State<ReceptionistPaymentsScreen>
     try {
       final response = await ApiService.instance.get('/receptionist/payable-appointments');
       final List<dynamic> data = response is List ? response : (response['results'] ?? []);
-      payable = data.map((e) => Appointment.fromJson(Map<String, dynamic>.from(e))).toList();
+      payable = List<Appointment>.from(
+        (data as List).map((e) => Appointment.fromJson(Map<String, dynamic>.from(e as Map))),
+      );
     } catch (_) {}
 
     if (!mounted) return;

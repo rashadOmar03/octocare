@@ -12,8 +12,10 @@ class AppointmentService {
     if (params.isNotEmpty) endpoint += '?${params.join('&')}';
 
     final response = await _api.get(endpoint);
-    final List<dynamic> data = response is List ? response : (response['items'] ?? []);
-    return data.map((e) => Appointment.fromJson(Map<String, dynamic>.from(e))).toList();
+    final list = response is List ? response : (response['items'] ?? []);
+    return List<Appointment>.from(
+      (list as List).map((e) => Appointment.fromJson(Map<String, dynamic>.from(e as Map))),
+    );
   }
 
   Future<Appointment> bookAppointment(Map<String, dynamic> data) async {
