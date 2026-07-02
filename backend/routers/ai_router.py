@@ -584,7 +584,10 @@ def _fetch_agent_facts(
         if "patient_lookup" in intents:
             term = _extract_search_term(message)
             if term:
-                results = tool_search_patient(db, term)
+                try:
+                    results = tool_search_patient(db, term)
+                except Exception:
+                    results = []
                 facts["patient_search_results"] = results
                 if not results:
                     facts["patient_search_note"] = (
@@ -606,25 +609,28 @@ def _fetch_agent_facts(
 
     # ── Receptionist patient lookup ──────────────────────────────────────────
     if "patient_lookup" in intents and role == "receptionist":
-        term = _extract_search_term(message)
-        if term:
-            from agent_tools import tool_search_patient
-            results = tool_search_patient(db, term)
-            facts["patient_search_results"] = results
-            if not results:
+        if "patient_search_results" not in facts:
+            term = _extract_search_term(message)
+            if term:
+                try:
+                    results = tool_search_patient(db, term)
+                except Exception:
+                    results = []
+                facts["patient_search_results"] = results
+                if not results:
+                    facts["patient_search_note"] = (
+                        f"NO PATIENTS FOUND matching '{term}'. "
+                        "This patient does NOT exist in the system. Do NOT invent patient data."
+                    )
+            else:
                 facts["patient_search_note"] = (
-                    f"NO PATIENTS FOUND matching '{term}'. "
-                    "This patient does NOT exist in the system. Do NOT invent patient data."
+                    "Please include the patient's name in your query."
                 )
-        else:
-            facts["patient_search_note"] = (
-                "Please include the patient's name in your query."
-            )
 
+    if role == "admin":
         if "audit" in intents:
             facts["recent_audit_7d"] = tool_audit_summary(db, 7)
 
-        # Admin always gets dashboard if no other data was fetched
         if not facts:
             facts["admin_dashboard"] = tool_admin_dashboard(db)
 
@@ -677,7 +683,10 @@ async def agent_chat(
     intents = detect_intent(data.message, role)
 
     # 3. Fetch live DB facts
-    facts = _fetch_agent_facts(intents, role, current_user, data.message, db)
+    try:
+        facts = _fetch_agent_facts(intents, role, current_user, data.message, db)
+    except Exception:
+        facts = {"error": "Failed to fetch some data. Answer based on available information."}
 
     # 4. Build system prompt (no per-language split; language rule is in the prompt)
     base_prompt = _AGENT_SYSTEM.get(role, _AGENT_SYSTEM["patient"])
