@@ -218,11 +218,6 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
                       arguments: {'appointment_id': apt.id, 'open_dialog': true},
                     ).then((_) => _loadData())
                 : null,
-            onRecordPayment: () => Navigator.pushNamed(
-              context,
-              AppRoutes.receptionistPayments,
-              arguments: {'appointment_id': apt.id, 'open_dialog': true},
-            ),
             onConfirm: showConfirm ? () => _confirm(apt) : null,
             onCancel: showCancel ? () => _cancel(apt) : null,
             onMarkArrived: showMarkArrived && (!markArrivedTodayOnly || apt.isToday)
