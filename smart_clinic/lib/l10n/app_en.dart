@@ -285,7 +285,7 @@ class AppStringsEn {
     'download_report': 'Download Report',
     'report_includes': 'Report Includes',
     'vitals_data': 'Vitals Data',
-    'report_download_info': 'Your report is being generated. Check your downloads.',
+    'report_download_info': 'Report ready — use the share menu to save or open it.',
     'export_format': 'Export Format',
     'format_pdf': 'PDF (print & share)',
     'format_csv': 'CSV (Excel charts & analysis)',

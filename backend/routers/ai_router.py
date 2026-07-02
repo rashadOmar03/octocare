@@ -58,6 +58,11 @@ from agent_tools import (
     tool_live_queue,
 )
 from agent_intent import detect_intent, detect_language as _agent_detect_lang
+from agent_router import (
+    baseline_intents_for_role,
+    classify_intents_semantic,
+    merge_intent_results,
+)
 
 router = APIRouter()
 
@@ -316,7 +321,12 @@ _AGENT_SYSTEM: dict[str, str] = {
         "  available time slots from the data. List them clearly (e.g. 09:00, 09:30, 10:00).\n"
         "  Never say 'I cannot determine appointments' when availability data exists.\n"
         "- If the user asks about a specific doctor's schedule or availability,\n"
-        "  show the exact slots, date, and working hours from the data."
+        "  show the exact slots, date, and working hours from the data.\n"
+        "- When MY APPOINTMENTS data is provided, answer from that list first.\n"
+        "  If the list is empty, say the patient has no appointments on record — do NOT\n"
+        "  claim you lack access to their bookings.\n"
+        "- If they also ask how to book, explain the in-app booking steps after listing\n"
+        "  their appointments (or after confirming they have none)."
         + _FORMAT_RULES + _LANG_RULE
     ),
     "receptionist": (
@@ -686,8 +696,21 @@ async def agent_chat(
             detail="Chat message limit reached. Please start a new conversation.",
         )
 
-    # 2. Detect intents
-    intents = detect_intent(data.message, role)
+    # 2. Route message → DB tools (LLM understands Arabic/English; keywords are fallback)
+    keyword_intents = detect_intent(data.message, role)
+    semantic_intents = None
+    if os.getenv("AGENT_SEMANTIC_ROUTER", "true").lower() not in ("0", "false", "no", "off"):
+        semantic_intents = classify_intents_semantic(
+            data.message,
+            role,
+            lambda sys, msg: _call_model(
+                sys, msg, temperature=0, max_tokens=256, json_mode=True,
+            ),
+        )
+    intents = merge_intent_results(semantic_intents, keyword_intents, role)
+    for baseline in baseline_intents_for_role(role):
+        if baseline not in intents:
+            intents.append(baseline)
 
     # 3. Fetch live DB facts
     try:

@@ -285,7 +285,7 @@ class AppStringsAr {
     'download_report': 'تحميل التقرير',
     'report_includes': 'يتضمن التقرير',
     'vitals_data': 'بيانات العلامات الحيوية',
-    'report_download_info': 'يتم إنشاء تقريرك. تحقق من التنزيلات.',
+    'report_download_info': 'التقرير جاهز — استخدم قائمة المشاركة للحفظ أو الفتح.',
     'export_format': 'صيغة التصدير',
     'format_pdf': 'PDF (طباعة ومشاركة)',
     'format_csv': 'CSV (رسوم بيانية وتحليل في Excel)',

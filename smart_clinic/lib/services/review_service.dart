@@ -6,7 +6,9 @@ class ReviewService {
   Future<List<Map<String, dynamic>>> getPendingReviews() async {
     final response = await _api.get('/reviews/pending');
     final list = response is List ? response : (response['items'] ?? []);
-    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return List<Map<String, dynamic>>.from(
+      (list as List).map((e) => Map<String, dynamic>.from(e as Map)),
+    );
   }
 
   Future<Map<String, dynamic>> getDoctorReviews(String doctorId) async {

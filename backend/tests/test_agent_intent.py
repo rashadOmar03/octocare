@@ -320,6 +320,11 @@ class TestEgyptianArabic:
         intents = detect_intent("الميعاد بتاعي ايه؟", "patient")
         assert "my_appointments" in intents
 
+    def test_my_apts_forgot_booking_ar(self):
+        msg = "انا نسيت المعادل اللي انا حجزت فيه ممكن تقولي المعادل اللي انا حجزته"
+        intents = detect_intent(msg, "patient")
+        assert "my_appointments" in intents
+
     # Revenue (receptionist)
     def test_revenue_felos(self):
         intents = detect_intent("كسبنا كام النهارده؟", "receptionist")

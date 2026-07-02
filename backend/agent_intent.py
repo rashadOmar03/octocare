@@ -1,11 +1,9 @@
 """
-Keyword-based intent detector for the AI agent.
+Intent detection for the AI agent (keyword fallback).
 
-The backend picks which tools to run; Gemma only handles language / plans.
-Multiple intents can fire at once (e.g. "revenue AND cancellations").
-
-Egyptian Arabic (عامية مصرية) keywords are included alongside formal Arabic
-and English for full trilingual coverage.
+Primary routing uses LLM semantic classification in agent_router.py.
+These keywords are kept as a safety net when the model is offline or returns
+invalid JSON, and for fast unit tests without an LLM call.
 """
 
 from __future__ import annotations
@@ -116,6 +114,11 @@ _MY_APTS_KW = {
     "حجوزاتي", "الحجز بتاعي", "الميعاد بتاعي",
     "فين حجزي", "فين ميعادي", "فين موعدي",
     "عندي ميعاد", "عندي حجز", "انا حاجز عند",
+    "نسيت", "نسيت المعاد", "نسيت الميعاد", "نسيت الموعد",
+    "المعاد", "المعادل", "الميعاد", "الموعد",
+    "حجزت", "حجزته", "حجزت فيه", "اللي حجزته", "اللي انا حجزت",
+    "ايه بالظبط", "إيه بالظبط", "موعدي ايه", "ميعادي ايه",
+    "الميعاد اللي", "المعاد اللي", "الموعد اللي",
 }
 
 _REVENUE_KW = {
@@ -334,10 +337,20 @@ def detect_intent(message: str, role: str) -> list[str]:
         intents.append("symptom_advice")
 
     # ── Patient only ───────────────────────────────────────────────────────────
-    if role == "patient" and _match(message, _MY_APTS_KW):
-        intents.append("my_appointments")
-        if "doctor_availability" in intents:
-            intents.remove("doctor_availability")
+    if role == "patient":
+        personal_booking = (
+            any(k in message for k in ("انا", "أنا", "لي", "بتاعي", "بتاعى", "عندي", "نسيت"))
+            and any(
+                k in message
+                for k in (
+                    "حجز", "حجزت", "حجزته", "موعد", "ميعاد", "معاد", "المعاد", "المعادل",
+                )
+            )
+        )
+        if _match(message, _MY_APTS_KW) or personal_booking:
+            intents.append("my_appointments")
+            if "doctor_availability" in intents:
+                intents.remove("doctor_availability")
 
     # ── Receptionist & admin ───────────────────────────────────────────────────
     if role in ("receptionist", "admin"):

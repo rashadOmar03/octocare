@@ -46,6 +46,11 @@ TestSession = sessionmaker(bind=TEST_ENGINE)
 
 
 @pytest.fixture(autouse=True)
+def _disable_semantic_router(monkeypatch):
+    monkeypatch.setenv("AGENT_SEMANTIC_ROUTER", "false")
+
+
+@pytest.fixture(autouse=True)
 def _setup_db():
     global _ep_slot_counter
     _ep_slot_counter = 0
@@ -168,6 +173,13 @@ MODEL_PATCH = "routers.ai_router._call_model"
 MODEL_RETURN = "This is a grounded AI response based on real data."
 
 
+def _llm_payload(mock) -> str:
+    """Combined system + user text from the final agent LLM call (facts live in user message)."""
+    call = mock.call_args_list[-1] if mock.call_args_list else mock.call_args
+    system, user = call[0][0], call[0][1]
+    return f"{system}\n{user}"
+
+
 # ─── Auth guard ───────────────────────────────────────────────────────────────
 
 class TestAgentAuth:
@@ -238,8 +250,7 @@ class TestPatientRole:
         auth_as("patient")
         client.post("/ai/agent", json={"message": "What are the working hours?"})
         # Check that system prompt contains clinic data
-        call_args = mock_model.call_args
-        system_prompt = call_args[0][0]
+        system_prompt = _llm_payload(mock_model)
         assert "CLINIC DATA" in system_prompt or "CLINIC SETTINGS" in system_prompt
 
     @patch(MODEL_PATCH, return_value=MODEL_RETURN)
@@ -311,8 +322,7 @@ class TestReceptionistRole:
         mock_model.return_value = MODEL_RETURN
         auth_as("receptionist")
         client.post("/ai/agent", json={"message": "What is the revenue?"})
-        call_args = mock_model.call_args
-        system_prompt = call_args[0][0]
+        system_prompt = _llm_payload(mock_model)
         # Revenue data should be in the system prompt
         assert "999" in system_prompt or "REVENUE" in system_prompt.upper()
 
@@ -369,7 +379,7 @@ class TestDoctorRole:
         mock_model.return_value = MODEL_RETURN
         auth_as("doctor", user=d_user1)
         client.post("/ai/agent", json={"message": "What is my schedule today?"})
-        system_prompt = mock_model.call_args[0][0]
+        system_prompt = _llm_payload(mock_model)
         # doc1's schedule should be in prompt, not doc2's directly
         assert "Doc1" in system_prompt or "MY SCHEDULE" in system_prompt.upper()
 
@@ -410,7 +420,7 @@ class TestAdminRole:
         mock_model.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "Give me a complete overview"})
-        system_prompt = mock_model.call_args[0][0]
+        system_prompt = _llm_payload(mock_model)
         assert "total_patients" in system_prompt or "ADMIN DASHBOARD" in system_prompt.upper()
 
     @patch(MODEL_PATCH, return_value=MODEL_RETURN)
@@ -440,7 +450,7 @@ class TestAdminRole:
         mock_model.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "Find patient named Zeina"})
-        system_prompt = mock_model.call_args[0][0]
+        system_prompt = _llm_payload(mock_model)
         assert "Zeina" in system_prompt
 
     @patch(MODEL_PATCH)
@@ -449,7 +459,7 @@ class TestAdminRole:
         mock_model.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "Find a patient"})
-        system_prompt = mock_model.call_args[0][0]
+        system_prompt = _llm_payload(mock_model)
         # Should include a note asking for the patient's name
         assert "name" in system_prompt.lower() or "patient" in system_prompt.lower()
 
@@ -488,7 +498,7 @@ class TestAdminRole:
         mock_model.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "Show me everything about all patients"})
-        system_prompt = mock_model.call_args[0][0]
+        system_prompt = _llm_payload(mock_model)
         # Admin system prompt should mention PHI limitation
         assert "privacy" in system_prompt.lower() or "all patient" in system_prompt.lower()
 
@@ -527,7 +537,7 @@ class TestRoleIsolation:
         mock_model.return_value = MODEL_RETURN
         auth_as("patient")
         client.post("/ai/agent", json={"message": "total revenue admin dashboard"})
-        system_prompt = mock_model.call_args[0][0]
+        system_prompt = _llm_payload(mock_model)
         assert "admin_dashboard" not in system_prompt.lower()
         assert "net_revenue" not in system_prompt
 
@@ -537,8 +547,9 @@ class TestRoleIsolation:
         mock_model.return_value = MODEL_RETURN
         auth_as("receptionist")
         client.post("/ai/agent", json={"message": "who did what in the audit"})
-        system_prompt = mock_model.call_args[0][0]
-        assert "audit" not in system_prompt.lower()
+        payload = _llm_payload(mock_model)
+        assert "### RECENT AUDIT" not in payload
+        assert "### AUDIT" not in payload
 
     @patch(MODEL_PATCH)
     def test_doctor_prompt_never_has_audit_log(self, mock_model, auth_as, db_session):
@@ -546,9 +557,9 @@ class TestRoleIsolation:
         mock_model.return_value = MODEL_RETURN
         auth_as("doctor")
         client.post("/ai/agent", json={"message": "show me audit log and all patients revenue"})
-        system_prompt = mock_model.call_args[0][0]
-        assert "audit" not in system_prompt.lower()
-        assert "admin_dashboard" not in system_prompt.lower()
+        payload = _llm_payload(mock_model)
+        assert "### RECENT AUDIT" not in payload
+        assert "### ADMIN DASHBOARD" not in payload
 
     @patch(MODEL_PATCH)
     def test_system_prompt_contains_role_specific_rules(self, mock_model, auth_as, db_session):
@@ -556,7 +567,7 @@ class TestRoleIsolation:
         mock_model.return_value = MODEL_RETURN
         auth_as("patient")
         client.post("/ai/agent", json={"message": "hello"})
-        system_prompt = mock_model.call_args[0][0]
+        system_prompt = _llm_payload(mock_model)
         # Patient prompt should mention doctor recommendation
         assert "doctor" in system_prompt.lower()
 
@@ -566,7 +577,7 @@ class TestRoleIsolation:
         mock_model.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "hello"})
-        system_prompt = mock_model.call_args[0][0]
+        system_prompt = _llm_payload(mock_model)
         assert "privacy" in system_prompt.lower() or "not shown here" in system_prompt.lower()
 
 
@@ -704,7 +715,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("patient")
         client.post("/ai/agent", json={"message": "What are the clinic working hours and fees?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "working_hours_start" in prompt
 
     @patch(MODEL_PATCH)
@@ -713,7 +724,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("patient")
         client.post("/ai/agent", json={"message": "What doctor specialties do you have?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "Dermatology" in prompt
 
     @patch(MODEL_PATCH)
@@ -732,7 +743,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("patient")
         client.post("/ai/agent", json={"message": "Show me doctors and their ratings"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "Nabil" in prompt
         assert "average_rating" in prompt
 
@@ -744,7 +755,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("patient")
         client.post("/ai/agent", json={"message": "I have pain in my knee and back"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "Samir" in prompt or "Orthopedics" in prompt
 
     @patch(MODEL_PATCH)
@@ -759,7 +770,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("patient", user=pu)
         client.post("/ai/agent", json={"message": "Show me my appointments"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "completed" in prompt or "pending" in prompt
 
     @patch(MODEL_PATCH)
@@ -771,7 +782,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("patient")
         client.post("/ai/agent", json={"message": "Is Dr. Hany free tomorrow?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "available_slots" in prompt or "available_count" in prompt
 
     @patch(MODEL_PATCH)
@@ -783,7 +794,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("patient")
         client.post("/ai/agent", json={"message": "هل الدكتور أحمد متاح بكره؟"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "available_slots" in prompt or "available_count" in prompt
 
     # ── RECEPTIONIST: today stats, revenue, cancellations, doctor workload,
@@ -800,7 +811,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("receptionist")
         client.post("/ai/agent", json={"message": "How many patients today?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "total" in prompt and "confirmed" in prompt
 
     @patch(MODEL_PATCH)
@@ -814,7 +825,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("receptionist")
         client.post("/ai/agent", json={"message": "What is the revenue?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "revenue_last_7_days" in prompt or "total_paid" in prompt
 
     @patch(MODEL_PATCH)
@@ -828,7 +839,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("receptionist")
         client.post("/ai/agent", json={"message": "Who cancelled this week?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "cancelled" in prompt.lower()
         assert "estimated_lost_revenue" in prompt or "150" in prompt
 
@@ -841,7 +852,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("receptionist")
         client.post("/ai/agent", json={"message": "Is Dr. Tarek free today? Any open slot?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "available_slots" in prompt or "available_count" in prompt
 
     # ── DOCTOR: own schedule, own reviews, today stats, availability ──────────
@@ -856,7 +867,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("doctor", user=du)
         client.post("/ai/agent", json={"message": "What is my schedule today?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "Sara" in prompt
 
     @patch(MODEL_PATCH)
@@ -874,7 +885,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("doctor", user=du)
         client.post("/ai/agent", json={"message": "What are my reviews and rating?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "Amazing" in prompt or "average_rating" in prompt
 
     @patch(MODEL_PATCH)
@@ -887,7 +898,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("doctor", user=du)
         client.post("/ai/agent", json={"message": "How many patients today?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "total" in prompt
 
     @patch(MODEL_PATCH)
@@ -899,7 +910,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("doctor", user=du)
         client.post("/ai/agent", json={"message": "What free slots are available tomorrow?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "available_slots" in prompt or "available_count" in prompt
 
     # ── ADMIN: dashboard, compare doctors, patient lookup, staff list,
@@ -915,7 +926,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "Give me the total overview"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "total_patients" in prompt
         assert "total_doctors" in prompt
         assert "total_receptionists" in prompt
@@ -934,7 +945,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "Compare doctors by appointments"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "DocA" in prompt and "DocB" in prompt
 
     @patch(MODEL_PATCH)
@@ -947,7 +958,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "Show me all staff and employees"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "StaffDoc" in prompt
         assert "StaffRec" in prompt
 
@@ -959,7 +970,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "Find patient named Mariam"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "Mariam" in prompt
         assert "Khalil" in prompt
 
@@ -974,7 +985,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "Show me the audit log activity"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "login" in prompt
 
     @patch(MODEL_PATCH)
@@ -988,7 +999,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "What is the revenue and income?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "1500" in prompt or "total_paid" in prompt
 
     @patch(MODEL_PATCH)
@@ -1002,7 +1013,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "How many cancellations and refunds?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "cancelled" in prompt.lower()
 
     @patch(MODEL_PATCH)
@@ -1014,7 +1025,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("admin")
         client.post("/ai/agent", json={"message": "Which doctor has open slot availability today?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "available_slots" in prompt or "available_count" in prompt
 
     # ── CROSS-ROLE: role isolation double-checks ─────────────────────────────
@@ -1030,7 +1041,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("patient")
         client.post("/ai/agent", json={"message": "What is the revenue?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "total_paid" not in prompt
         assert "net_revenue" not in prompt
 
@@ -1040,7 +1051,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("patient")
         client.post("/ai/agent", json={"message": "Show me the audit log"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "recent_audit" not in prompt
 
     @patch(MODEL_PATCH)
@@ -1049,7 +1060,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("receptionist")
         client.post("/ai/agent", json={"message": "Show me the audit log"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "recent_audit" not in prompt
 
     @patch(MODEL_PATCH)
@@ -1058,7 +1069,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("doctor")
         client.post("/ai/agent", json={"message": "What is the revenue?"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "total_paid" not in prompt
 
     @patch(MODEL_PATCH)
@@ -1067,7 +1078,7 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("doctor")
         client.post("/ai/agent", json={"message": "Compare all doctors"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "doctor_comparison" not in prompt
 
     @patch(MODEL_PATCH)
@@ -1078,5 +1089,5 @@ class TestFeatureCoverage:
         mock.return_value = MODEL_RETURN
         auth_as("receptionist")
         client.post("/ai/agent", json={"message": "Find patient named Secret"})
-        prompt = mock.call_args[0][0]
+        prompt = _llm_payload(mock)
         assert "patient_search_results" not in prompt

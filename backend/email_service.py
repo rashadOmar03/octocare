@@ -129,9 +129,23 @@ def _send_via_brevo(from_addr: str, from_name: str, to_email: str, subject: str,
     )
     if response.status_code >= 400:
         detail = response.text[:500]
-        if "not verified" in detail.lower() or "sender" in detail.lower():
+        detail_lower = detail.lower()
+        if "not verified" in detail_lower or "sender" in detail_lower:
             raise RuntimeError(
                 f"Brevo rejected sender {from_addr}. Verify this email in Brevo → Senders. Details: {detail}"
+            )
+        if response.status_code == 401 and (
+            "ip" in detail_lower
+            or "authorised" in detail_lower
+            or "authorized" in detail_lower
+            or "unrecognised" in detail_lower
+            or "unrecognized" in detail_lower
+        ):
+            raise RuntimeError(
+                "Brevo blocked this server's IP address. Railway IPs change on redeploy — "
+                "in Brevo go to Security → Authorized IPs and disable IP restriction (recommended), "
+                "or re-add the current Railway outbound IP after each deploy. "
+                f"Details: {detail}"
             )
         raise RuntimeError(f"Brevo API error {response.status_code}: {detail}")
     print(f"[Smart Clinic Email] Brevo accepted message to {to_email}: {response.text[:200]}", flush=True)

@@ -90,7 +90,9 @@ class ReceptionistService {
   Future<List<Map<String, dynamic>>> getDoctors() async {
     final response = await _api.get('/receptionist/doctors');
     final list = response is List ? response : (response['results'] ?? []);
-    return list.map((e) => Map<String, dynamic>.from(e)).toList();
+    return List<Map<String, dynamic>>.from(
+      (list as List).map((e) => Map<String, dynamic>.from(e as Map)),
+    );
   }
 
   Future<List<String>> getAvailableSlots(String doctorId, String date) async {
