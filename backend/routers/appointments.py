@@ -125,14 +125,43 @@ def my_queue_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Patient sees only their own queue number for today's visit — not the full queue."""
-    if current_user.role != "patient":
-        raise HTTPException(status_code=403, detail="Patients only")
+    """
+    Patient: see own queue number.
+    Doctor: see patients queued for them today.
+    Staff: returns empty (use /receptionist/queue instead).
+    """
     profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
     if not profile:
         return {"in_queue": False}
 
     today = date.today()
+
+    if current_user.role == "doctor":
+        doctor = db.query(Doctor).filter(Doctor.profile_id == profile.id).first()
+        if not doctor:
+            return {"in_queue": False, "queue": []}
+        arrived = (
+            db.query(Appointment)
+            .filter(
+                Appointment.doctor_id == doctor.id,
+                Appointment.date == today,
+                Appointment.status == "arrived",
+                Appointment.queue_number.isnot(None),
+            )
+            .order_by(Appointment.queue_number.asc())
+            .all()
+        )
+        queue_list = []
+        for apt in arrived:
+            patient_name = _get_patient_name(db, apt.patient_id)
+            queue_list.append({
+                "queue_number": apt.queue_number,
+                "patient_name": patient_name,
+                "appointment_id": apt.id,
+                "time_slot": apt.time_slot,
+            })
+        return {"in_queue": len(queue_list) > 0, "queue": queue_list, "total": len(queue_list)}
+
     appointment = (
         db.query(Appointment)
         .filter(

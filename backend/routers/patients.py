@@ -461,8 +461,8 @@ def my_care_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if current_user.role != "patient":
-        raise HTTPException(status_code=403, detail="Patients only")
+    if current_user.role not in ("patient", "admin", "doctor"):
+        raise HTTPException(status_code=403, detail="Not authorized")
 
     profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
     if not profile:

@@ -260,6 +260,35 @@ def clinic_info(
     )
 
 
+@router.get("/patients", response_model=list[ReceptionistPatientSearchResult])
+def list_patients(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(require_role("receptionist", "admin", "doctor")),
+    db: Session = Depends(get_db),
+):
+    """List all patients (paginated)."""
+    offset = (page - 1) * limit
+    rows = (
+        db.query(Profile, User)
+        .join(User, User.id == Profile.user_id)
+        .filter(User.role == "patient", User.is_active == True)
+        .order_by(Profile.first_name.asc(), Profile.last_name.asc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return [
+        ReceptionistPatientSearchResult(
+            profile_id=profile.id,
+            name=f"{profile.first_name or ''} {profile.last_name or ''}".strip() or "Patient",
+            email=user.email,
+            phone=profile.phone or user.phone,
+        )
+        for profile, user in rows
+    ]
+
+
 @router.get("/patients/search", response_model=list[ReceptionistPatientSearchResult])
 def search_patients(
     q: str = Query("", alias="q"),
@@ -297,6 +326,26 @@ def search_patients(
         )
         for profile, user in rows
     ]
+
+
+@router.get("/appointments", response_model=list)
+def list_receptionist_appointments(
+    date_filter: date = Query(None, alias="date"),
+    status_filter: str = Query(None, alias="status"),
+    current_user: User = Depends(require_role("receptionist", "admin")),
+    db: Session = Depends(get_db),
+):
+    """List appointments visible to receptionist (today by default)."""
+    auto_cancel_expired_appointments(db)
+    query = db.query(Appointment)
+    if date_filter:
+        query = query.filter(Appointment.date == date_filter)
+    else:
+        query = query.filter(Appointment.date == date.today())
+    if status_filter:
+        query = query.filter(Appointment.status == status_filter)
+    appointments = query.order_by(Appointment.time_slot.asc()).all()
+    return [_enrich_appointment(apt, db) for apt in appointments]
 
 
 @router.post("/appointments", status_code=status.HTTP_201_CREATED)
@@ -489,7 +538,7 @@ def register_patient(
         password_hash=hash_password(temp_password),
         role="patient",
         must_change_password=True,
-        email_verified=False,
+        email_verified=True,
     )
     db.add(user)
 
@@ -514,7 +563,6 @@ def register_patient(
     db.add(profile)
     db.commit()
 
-    create_and_send_otp(db, email, "signup", background_tasks)
     welcome_sent = False
     try:
         send_patient_welcome_email(db, email, temp_password, data.first_name)
@@ -528,7 +576,7 @@ def register_patient(
         title="Account created",
         message=(
             f"Welcome {data.first_name}! Your temporary password is: {temp_password}. "
-            "Verify your email, then log in and change your password."
+            "Log in and change your password."
         ),
     ))
     _notify_staff(
@@ -549,14 +597,14 @@ def register_patient(
     db.commit()
 
     return {
-        "message": "Patient registered. A verification code was sent to the patient's email.",
+        "message": "Patient registered successfully. They can log in with the temporary password.",
         "user_id": user_id,
         "email": email,
         "temp_password": temp_password,
         "temporary_password": temp_password,
-        "otp_sent": True,
+        "otp_sent": False,
         "welcome_email_sent": welcome_sent,
-        "login_blocked_until_verified": True,
+        "login_blocked_until_verified": False,
     }
 
 

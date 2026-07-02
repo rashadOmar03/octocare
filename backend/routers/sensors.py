@@ -25,7 +25,20 @@ def _assert_doctor_can_read_patient_sensors(db: Session, patient_id: str, doctor
         )
         .first()
     )
-    if not has_relationship:
+    if has_relationship:
+        return
+    from datetime import date as _date
+    has_today = (
+        db.query(Appointment.id)
+        .filter(
+            Appointment.patient_id == patient_id,
+            Appointment.doctor_id == doctor_id,
+            Appointment.date == _date.today(),
+            Appointment.status.in_(["arrived", "confirmed", "pending"]),
+        )
+        .first()
+    )
+    if not has_today:
         raise HTTPException(
             status_code=403,
             detail="Not authorized to view this patient's sensor data",

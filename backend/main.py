@@ -580,7 +580,7 @@ if WEB_BUILD.exists():
     _API_PREFIXES = (
         "auth/", "patients/", "appointments/", "records/", "prescriptions/",
         "ai/", "sensors/", "reports/", "admin/", "receptionist/", "doctors/",
-        "reviews/", "uploads/", "api/", "docs", "openapi.json", "redoc",
+        "reviews/", "uploads/", "api/", "queue/", "docs", "openapi.json", "redoc",
     )
 
     @app.get("/{full_path:path}")

@@ -81,6 +81,21 @@ def _validate_rating(value: int, label: str) -> None:
         raise HTTPException(status_code=400, detail=f"{label} must be between 1 and 5")
 
 
+@router.get("/", response_model=list)
+def list_all_reviews(
+    current_user: User = Depends(require_role("admin", "receptionist")),
+    db: Session = Depends(get_db),
+):
+    """List all reviews (admin/receptionist view)."""
+    reviews = (
+        db.query(AppointmentReview)
+        .order_by(AppointmentReview.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    return [_enrich_review(r, db) for r in reviews]
+
+
 @router.get("/pending", response_model=list)
 def pending_reviews(
     current_user: User = Depends(require_role("patient")),

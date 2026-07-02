@@ -16,6 +16,7 @@ Return ONE valid JSON object ONLY. No markdown. No explanations.
 RULES:
 - Do NOT copy long paragraphs into SOAP sections. Summarize professionally like a hospital EHR.
 - Extract EVERY symptom mentioned, including implied/clinical terms (synonyms, abbreviations expanded).
+- NEGATED symptoms (e.g. "no fever", "denies cough", "لا يوجد حرارة") must NOT be listed as positive symptoms. Only include them as pertinent negatives in the objective/assessment if clinically relevant.
 - Deduplicate and normalize entities (e.g. HF, heart failure, CHF → one diagnosis entry).
 - Separate medications into prescription (new/current orders) vs plan (non-drug actions).
 - Plan must NOT contain medications — put all drugs in prescription array OR medications_current based on context.

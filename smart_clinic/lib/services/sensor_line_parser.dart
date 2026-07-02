@@ -114,6 +114,10 @@ class SensorLineParser {
 
   static double? _toDouble(dynamic value) {
     if (value == null) return null;
-    return double.tryParse(value.toString().trim());
+    var text = value.toString().trim();
+    if (text.toUpperCase().endsWith('C')) {
+      text = text.substring(0, text.length - 1).trim();
+    }
+    return double.tryParse(text);
   }
 }
