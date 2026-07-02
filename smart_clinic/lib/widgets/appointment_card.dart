@@ -186,11 +186,18 @@ class AppointmentCard extends StatelessWidget {
                         label: Text(AppLocalizations.tr('mark_arrived')),
                         style: TextButton.styleFrom(foregroundColor: const Color(0xFF7B1FA2)),
                       ),
-                    if (onRecordPayment != null && appointment.status == 'confirmed' && !appointment.isPaid)
+                    if (onRecordPayment != null &&
+                        !appointment.isPaid &&
+                        appointment.status != 'cancelled' &&
+                        appointment.status != 'completed')
                       TextButton.icon(
                         onPressed: onRecordPayment,
                         icon: const Icon(Icons.payment, size: 18),
-                        label: Text(AppLocalizations.tr('record_payment')),
+                        label: Text(
+                          appointment.needsPayment
+                              ? AppLocalizations.tr('collect_payment_again')
+                              : AppLocalizations.tr('record_payment'),
+                        ),
                         style: TextButton.styleFrom(foregroundColor: const Color(0xFFF57C00)),
                       ),
                     if (onMarkArrived != null && !appointment.isPaid && appointment.status == 'confirmed') ...[

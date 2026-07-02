@@ -42,7 +42,16 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     try {
       final all = await _appointmentService.getTodayAppointments();
       const activeStatuses = {'pending', 'confirmed', 'arrived'};
-      _todayAppointments = all.where((a) => activeStatuses.contains(a.status)).toList();
+      _todayAppointments = all.where((a) => activeStatuses.contains(a.status)).toList()
+        ..sort((a, b) {
+          final aArrived = a.status == 'arrived';
+          final bArrived = b.status == 'arrived';
+          if (aArrived != bArrived) return aArrived ? -1 : 1;
+          if (aArrived && bArrived) {
+            return (a.queueNumber ?? 999).compareTo(b.queueNumber ?? 999);
+          }
+          return (a.timeSlot ?? '').compareTo(b.timeSlot ?? '');
+        });
     } catch (_) {
       try {
         final all = await _appointmentService.getAppointments();
@@ -51,7 +60,16 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         const activeStatuses = {'pending', 'confirmed', 'arrived'};
         _todayAppointments = all
             .where((a) => a.date == todayStr && activeStatuses.contains(a.status))
-            .toList();
+            .toList()
+          ..sort((a, b) {
+            final aArrived = a.status == 'arrived';
+            final bArrived = b.status == 'arrived';
+            if (aArrived != bArrived) return aArrived ? -1 : 1;
+            if (aArrived && bArrived) {
+              return (a.queueNumber ?? 999).compareTo(b.queueNumber ?? 999);
+            }
+            return (a.timeSlot ?? '').compareTo(b.timeSlot ?? '');
+          });
       } catch (e) {
         _loadError = e.toString();
       }
@@ -233,9 +251,22 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   else
                     ..._todayAppointments.take(5).map((a) => Card(
                           child: ListTile(
-                            leading: CircleAvatar(child: Text(a.patientName?.isNotEmpty == true ? a.patientName![0] : '?')),
+                            leading: CircleAvatar(
+                              backgroundColor: a.status == 'arrived'
+                                  ? const Color(0xFF7B1FA2).withValues(alpha: 0.15)
+                                  : null,
+                              child: Text(
+                                a.status == 'arrived' && a.queueNumber != null
+                                    ? '${a.queueNumber}'
+                                    : (a.patientName?.isNotEmpty == true ? a.patientName![0] : '?'),
+                              ),
+                            ),
                             title: Text(a.patientName ?? ''),
-                            subtitle: Text(TimeFormat.format24To12(a.timeSlot)),
+                            subtitle: Text(
+                              a.status == 'arrived'
+                                  ? '${AppLocalizations.tr('waiting_queue')} • ${TimeFormat.format24To12(a.timeSlot)}'
+                                  : TimeFormat.format24To12(a.timeSlot),
+                            ),
                             trailing: _consultationTrailing(a),
                             onTap: (a.isConsultationEditable || a.isConsultationEditOnly)
                                 ? () => openDoctorConsultation(context, a)

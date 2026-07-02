@@ -141,6 +141,26 @@ async def _extract_proof_from_form(form) -> object | None:
     return None
 
 
+def _reactivate_payment_after_refund(
+    payment: Payment,
+    amount: float,
+    method: str,
+    proof_url: str | None,
+    rec_profile: Profile | None,
+) -> None:
+    """Allow collecting payment again on the same appointment after a refund."""
+    payment.amount = amount
+    payment.payment_method = method
+    payment.payment_status = "paid"
+    payment.proof_url = proof_url or payment.proof_url
+    payment.refunded_at = None
+    payment.refunded_by = None
+    payment.refund_reason = None
+    payment.refund_proof_url = None
+    if rec_profile:
+        payment.receptionist_id = rec_profile.id
+
+
 def _save_payment_record(
     db: Session,
     current_user: User,
@@ -156,7 +176,19 @@ def _save_payment_record(
         if existing.payment_status == "paid":
             raise HTTPException(status_code=400, detail="This appointment is already paid")
         if existing.payment_status == "refunded":
-            raise HTTPException(status_code=400, detail="Cannot re-pay a refunded appointment. Create a new booking.")
+            _reactivate_payment_after_refund(existing, amount, method, proof_url, rec_profile)
+            db.commit()
+            db.refresh(existing)
+            log_audit(
+                db,
+                current_user.id,
+                "record_payment",
+                "payment",
+                existing.id,
+                f"Re-collected {amount} EGP via {method} after refund for appointment {appointment_id}",
+            )
+            db.commit()
+            return _enrich_payment(existing, db)
         existing.amount = amount
         existing.payment_method = method
         existing.payment_status = "paid"
@@ -749,54 +781,7 @@ def record_payment_json(
         raise HTTPException(status_code=404, detail="Appointment not found")
     _assert_payable_appointment(appointment)
 
-    amount = _default_fee(db)
-    rec_profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
-
-    existing = db.query(Payment).filter(Payment.appointment_id == apt_id).first()
-    if existing:
-        if existing.payment_status == "paid":
-            raise HTTPException(status_code=400, detail="This appointment is already paid")
-        if existing.payment_status == "refunded":
-            raise HTTPException(status_code=400, detail="Cannot re-pay a refunded appointment. Create a new booking.")
-        existing.amount = amount
-        existing.payment_method = method
-        existing.payment_status = "paid"
-        if rec_profile:
-            existing.receptionist_id = rec_profile.id
-        db.commit()
-        db.refresh(existing)
-        log_audit(
-            db,
-            current_user.id,
-            "record_payment",
-            "payment",
-            existing.id,
-            f"Updated payment to {amount} EGP via {method} for appointment {apt_id}",
-        )
-        db.commit()
-        return _enrich_payment(existing, db)
-
-    payment = Payment(
-        id=str(uuid.uuid4()),
-        appointment_id=apt_id,
-        amount=amount,
-        payment_method=method,
-        payment_status="paid",
-        receptionist_id=rec_profile.id if rec_profile else None,
-    )
-    db.add(payment)
-    db.commit()
-    db.refresh(payment)
-    log_audit(
-        db,
-        current_user.id,
-        "record_payment",
-        "payment",
-        payment.id,
-        f"Recorded {amount} EGP via {method} for appointment {apt_id}",
-    )
-    db.commit()
-    return _enrich_payment(payment, db)
+    return _save_payment_record(db, current_user, apt_id, method, None)
 
 
 @router.post("/payments/{payment_id}/refund", response_model=PaymentResponse)

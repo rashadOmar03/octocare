@@ -211,6 +211,13 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
           return AppointmentCard(
             appointment: apt,
             showPatient: true,
+            onRecordPayment: !apt.isPaid && apt.status != 'cancelled' && apt.status != 'completed'
+                ? () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.receptionistPayments,
+                      arguments: {'appointment_id': apt.id, 'open_dialog': true},
+                    ).then((_) => _loadData())
+                : null,
             onRecordPayment: () => Navigator.pushNamed(
               context,
               AppRoutes.receptionistPayments,
