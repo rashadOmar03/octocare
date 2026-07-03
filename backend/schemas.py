@@ -103,9 +103,9 @@ class ProfileCreate(BaseModel):
     gender: str
     phone: str
     address: str
-    emergency_contact_name: str
-    emergency_contact_phone: str
-    blood_type: str
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    blood_type: Optional[str] = "Unknown"
     allergies: Optional[str] = None
     chronic_diseases: Optional[str] = None
     existing_conditions: Optional[str] = None

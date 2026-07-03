@@ -23,6 +23,7 @@ from appointment_rules import (
 )
 from audit_service import log_audit
 from clinic_time import clinic_today
+from clinic_schedule import is_clinic_open, parse_working_days, working_days_label
 from access_control import (
     assert_appointment_read,
     assert_appointment_patient_action,
@@ -239,6 +240,18 @@ def doctor_my_patients(
     return results
 
 
+@router.get("/booking-info")
+def booking_info(db: Session = Depends(get_db)):
+    """Working days and booking rules for the patient calendar."""
+    settings = db.query(ClinicSettings).first()
+    days = sorted(parse_working_days(settings.working_days if settings else None))
+    return {
+        "working_days": days,
+        "working_days_label": working_days_label(settings.working_days if settings else None),
+        "min_booking_days_ahead": 1,
+    }
+
+
 @router.get("/specialties", response_model=list)
 def get_specialties_public(db: Session = Depends(get_db)):
     """Public endpoint for patients to see available specialties"""
@@ -313,7 +326,7 @@ def book_appointment(
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    validate_booking_date(data.date, current_user.role)
+    validate_booking_date(data.date, current_user.role, db)
 
     day_of_week = data.date.weekday()
     schedule = (
@@ -462,6 +475,10 @@ def available_slots(
     if slot_date < tomorrow:
         return {"slots": []}
 
+    settings = db.query(ClinicSettings).first()
+    if not is_clinic_open(slot_date, settings):
+        return {"slots": []}
+
     doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
@@ -479,7 +496,6 @@ def available_slots(
     if not schedule:
         return {"slots": []}
 
-    settings = db.query(ClinicSettings).first()
     duration = settings.appointment_duration if settings else 30
     all_slots = _generate_slots(schedule.start_time, schedule.end_time, duration)
 
@@ -668,7 +684,7 @@ def reschedule_appointment(
     if appointment.status in ("completed", "cancelled"):
         raise HTTPException(status_code=400, detail=f"Cannot reschedule a {appointment.status} appointment")
 
-    validate_booking_date(data.date, current_user.role)
+    validate_booking_date(data.date, current_user.role, db)
 
     validate_patient_booking(
         db,

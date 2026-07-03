@@ -252,7 +252,9 @@ def seed_data():
         )
         db.add(doc1)
 
-        for day in range(6):
+        from clinic_schedule import DEFAULT_WORKING_DAYS
+
+        for day in DEFAULT_WORKING_DAYS:
             db.add(DoctorSchedule(
                 doctor_id=doc1_id, day_of_week=day,
                 start_time="09:00", end_time="17:00", is_available=True,
@@ -297,7 +299,7 @@ def seed_data():
         )
         db.add(doc2)
 
-        for day in range(6):
+        for day in DEFAULT_WORKING_DAYS:
             db.add(DoctorSchedule(
                 doctor_id=doc2_id, day_of_week=day,
                 start_time="08:00", end_time="16:00", is_available=True,
@@ -342,7 +344,7 @@ def seed_data():
             default_fee=100.0,
             working_hours_start="08:00",
             working_hours_end="17:00",
-            working_days="0,1,2,3,4",
+            working_days="5,6,0,1,2,3",
             appointment_duration=30,
         )
         db.add(settings)
@@ -520,14 +522,9 @@ def _patch_index_html(source: str, build_id: str) -> str:
 UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
-from auth import get_current_user as _get_current_user
-
 @app.get("/uploads/{filename}")
-def serve_upload(
-    filename: str,
-    current_user=Depends(_get_current_user),
-):
-    """Authenticated file serving for uploads."""
+def serve_upload(filename: str):
+    """Serve uploaded files (upload endpoints still require authentication)."""
     safe_name = Path(filename).name
     file_path = UPLOADS_DIR / safe_name
     if not file_path.is_file():

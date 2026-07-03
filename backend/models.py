@@ -358,5 +358,5 @@ class ClinicSettings(Base):
     default_fee = Column(Float, default=100.0)
     working_hours_start = Column(String, default="08:00")
     working_hours_end = Column(String, default="17:00")
-    working_days = Column(String, default="0,1,2,3,4")
+    working_days = Column(String, default="5,6,0,1,2,3")
     appointment_duration = Column(Integer, default=30)

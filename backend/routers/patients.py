@@ -144,12 +144,12 @@ def complete_profile(
         existing.gender = data.gender
         existing.phone = phone
         existing.address = data.address
-        existing.emergency_contact_name = data.emergency_contact_name
-        existing.emergency_contact_phone = data.emergency_contact_phone
-        existing.blood_type = data.blood_type
-        existing.allergies = data.allergies
-        existing.chronic_diseases = data.chronic_diseases
-        existing.existing_conditions = data.existing_conditions
+        existing.emergency_contact_name = (data.emergency_contact_name or "").strip() or None
+        existing.emergency_contact_phone = (data.emergency_contact_phone or "").strip() or None
+        existing.blood_type = (data.blood_type or "").strip() or "Unknown"
+        existing.allergies = (data.allergies or "").strip() or None
+        existing.chronic_diseases = (data.chronic_diseases or "").strip() or None
+        existing.existing_conditions = (data.existing_conditions or "").strip() or None
         if data.photo_url:
             existing.photo_url = data.photo_url
         existing.is_complete = profile_personal_info_complete(existing)
@@ -167,12 +167,12 @@ def complete_profile(
         gender=data.gender,
         phone=phone,
         address=data.address,
-        emergency_contact_name=data.emergency_contact_name,
-        emergency_contact_phone=data.emergency_contact_phone,
-        blood_type=data.blood_type,
-        allergies=data.allergies,
-        chronic_diseases=data.chronic_diseases,
-        existing_conditions=data.existing_conditions,
+        emergency_contact_name=(data.emergency_contact_name or "").strip() or None,
+        emergency_contact_phone=(data.emergency_contact_phone or "").strip() or None,
+        blood_type=(data.blood_type or "").strip() or "Unknown",
+        allergies=(data.allergies or "").strip() or None,
+        chronic_diseases=(data.chronic_diseases or "").strip() or None,
+        existing_conditions=(data.existing_conditions or "").strip() or None,
         photo_url=data.photo_url,
         is_complete=False,
     )

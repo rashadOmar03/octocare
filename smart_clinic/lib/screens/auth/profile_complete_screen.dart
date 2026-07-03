@@ -33,7 +33,7 @@ class _ProfileCompleteScreenState extends State<ProfileCompleteScreen> {
   String? _storedLastName;
   String? _storedPhone;
 
-  final List<String> _bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  final List<String> _bloodTypes = ['Unknown', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
   final List<String> _stepTitles = ['personal_info', 'contact_info', 'medical_info'];
 
   @override
@@ -125,16 +125,9 @@ class _ProfileCompleteScreenState extends State<ProfileCompleteScreen> {
     return null;
   }
 
-  String? _validateContactInfo() {
-    if (_emergencyNameController.text.trim().isEmpty) return AppLocalizations.tr('field_required');
-    if (_emergencyPhoneController.text.trim().isEmpty) return AppLocalizations.tr('field_required');
-    return null;
-  }
+  String? _validateContactInfo() => null;
 
-  String? _validateMedicalInfo() {
-    if (_bloodType == null || _bloodType!.isEmpty) return AppLocalizations.tr('field_required');
-    return null;
-  }
+  String? _validateMedicalInfo() => null;
 
   void _showValidationError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -159,7 +152,7 @@ class _ProfileCompleteScreenState extends State<ProfileCompleteScreen> {
         'dob': _dobController.text.trim(),
         'gender': _gender,
         'address': _addressController.text.trim(),
-        'blood_type': _bloodType,
+        'blood_type': _bloodType ?? 'Unknown',
         'allergies': _allergiesController.text.trim(),
         'chronic_diseases': _chronicController.text.trim(),
         'existing_conditions': _conditionsController.text.trim(),
@@ -276,13 +269,13 @@ class _ProfileCompleteScreenState extends State<ProfileCompleteScreen> {
       children: [
         CustomTextField(
           controller: _emergencyNameController,
-          label: AppLocalizations.tr('emergency_contact_name'),
+          label: '${AppLocalizations.tr('emergency_contact_name')} (${AppLocalizations.tr('optional_field')})',
           prefixIcon: Icons.contact_emergency_outlined,
         ),
         const SizedBox(height: 12),
         CustomTextField(
           controller: _emergencyPhoneController,
-          label: AppLocalizations.tr('emergency_contact_phone'),
+          label: '${AppLocalizations.tr('emergency_contact_phone')} (${AppLocalizations.tr('optional_field')})',
           prefixIcon: Icons.phone_outlined,
           keyboardType: TextInputType.phone,
         ),
@@ -297,31 +290,34 @@ class _ProfileCompleteScreenState extends State<ProfileCompleteScreen> {
         DropdownButtonFormField<String>(
           value: _bloodType,
           decoration: InputDecoration(
-            labelText: AppLocalizations.tr('blood_type'),
+            labelText: '${AppLocalizations.tr('blood_type')} (${AppLocalizations.tr('optional_field')})',
             prefixIcon: const Icon(Icons.bloodtype_outlined),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          items: _bloodTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+          items: _bloodTypes.map((t) {
+            final label = t == 'Unknown' ? AppLocalizations.tr('blood_type_unknown') : t;
+            return DropdownMenuItem(value: t, child: Text(label));
+          }).toList(),
           onChanged: (v) => setState(() => _bloodType = v),
         ),
         const SizedBox(height: 12),
         CustomTextField(
           controller: _allergiesController,
-          label: AppLocalizations.tr('allergies'),
+          label: '${AppLocalizations.tr('allergies')} (${AppLocalizations.tr('optional_field')})',
           prefixIcon: Icons.warning_amber_outlined,
           maxLines: 2,
         ),
         const SizedBox(height: 12),
         CustomTextField(
           controller: _chronicController,
-          label: AppLocalizations.tr('chronic_diseases'),
+          label: '${AppLocalizations.tr('chronic_diseases')} (${AppLocalizations.tr('optional_field')})',
           prefixIcon: Icons.medical_services_outlined,
           maxLines: 2,
         ),
         const SizedBox(height: 12),
         CustomTextField(
           controller: _conditionsController,
-          label: AppLocalizations.tr('existing_conditions'),
+          label: '${AppLocalizations.tr('existing_conditions')} (${AppLocalizations.tr('optional_field')})',
           prefixIcon: Icons.health_and_safety_outlined,
           maxLines: 2,
         ),

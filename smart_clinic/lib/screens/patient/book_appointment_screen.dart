@@ -32,6 +32,9 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   DateTime? _selectedDate;
   String? _selectedTime;
 
+  List<int> _workingDays = [5, 6, 0, 1, 2, 3];
+  String _workingDaysLabel = 'Sat, Sun, Mon, Tue, Wed, Thu';
+
   @override
   void initState() {
     super.initState();
@@ -42,8 +45,29 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         Navigator.pushReplacementNamed(context, AppRoutes.profileComplete);
         return;
       }
+      _loadBookingInfo();
       _loadSpecialties();
     });
+  }
+
+  Future<void> _loadBookingInfo() async {
+    try {
+      final response = await ApiService.instance.get('/appointments/booking-info');
+      final days = response['working_days'];
+      if (days is List && days.isNotEmpty) {
+        _workingDays = days.map((d) => d is int ? d : int.parse('$d')).toList();
+      }
+      final label = response['working_days_label']?.toString();
+      if (label != null && label.isNotEmpty) {
+        _workingDaysLabel = label;
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  bool _isClinicOpen(DateTime day) {
+    final pythonDow = day.weekday == DateTime.sunday ? 6 : day.weekday - 1;
+    return _workingDays.contains(pythonDow);
   }
 
   Future<void> _loadSpecialties() async {
@@ -203,12 +227,22 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         setState(() => _currentStep = 1);
       }
     } else if (_currentStep == 1 && _selectedDoctor != null) {
+      var next = DateTime.now().add(const Duration(days: 1));
+      while (!_isClinicOpen(next) && next.isBefore(DateTime.now().add(const Duration(days: 60)))) {
+        next = next.add(const Duration(days: 1));
+      }
       setState(() {
         _currentStep = 2;
-        _selectedDate ??= DateTime.now().add(const Duration(days: 1));
+        _selectedDate = next;
       });
     } else if (_currentStep == 2 && _selectedDate != null) {
-      _loadSlots();
+      if (!_isClinicOpen(_selectedDate!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.tr('clinic_closed_day'))),
+        );
+        return;
+      }
+      await _loadSlots();
       setState(() => _currentStep = 3);
     } else if (_currentStep == 3 && _selectedTime != null) {
       _bookAppointment();
@@ -399,6 +433,10 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
 
   Widget _buildDatePicker() {
     final tomorrow = DateTime.now().add(const Duration(days: 1));
+    var initial = _selectedDate ?? tomorrow;
+    while (!_isClinicOpen(initial) && initial.isBefore(DateTime.now().add(const Duration(days: 60)))) {
+      initial = initial.add(const Duration(days: 1));
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -411,11 +449,22 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
             ),
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Text(
+            '${AppLocalizations.tr('working_days')}: $_workingDaysLabel',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
         CalendarDatePicker(
-          initialDate: _selectedDate ?? tomorrow,
+          initialDate: initial,
           firstDate: tomorrow,
           lastDate: DateTime.now().add(const Duration(days: 60)),
-          onDateChanged: (date) => setState(() => _selectedDate = date),
+          selectableDayPredicate: _isClinicOpen,
+          onDateChanged: (date) => setState(() {
+            _selectedDate = date;
+            _selectedTime = null;
+          }),
         ),
       ],
     );
@@ -430,7 +479,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
             Icon(Icons.event_busy, size: 48, color: Theme.of(context).colorScheme.error.withValues(alpha: 0.5)),
             const SizedBox(height: 8),
             Text(
-              AppLocalizations.tr('no_slots_available'),
+              AppLocalizations.tr('no_slots_available').replaceAll('{days}', _workingDaysLabel),
               style: Theme.of(context).textTheme.bodyLarge,
               textAlign: TextAlign.center,
             ),

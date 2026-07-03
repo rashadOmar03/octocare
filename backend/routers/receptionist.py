@@ -38,6 +38,7 @@ from otp_service import create_and_send_otp
 from email_service import send_patient_welcome_email
 from profile_utils import profile_personal_info_complete
 from clinic_time import clinic_today
+from clinic_schedule import is_clinic_open
 
 router = APIRouter()
 
@@ -500,6 +501,10 @@ def receptionist_available_slots(
     current_user: User = Depends(require_role("receptionist", "admin")),
 ):
     if slot_date < date.today():
+        return {"slots": []}
+
+    settings = db.query(ClinicSettings).first()
+    if not is_clinic_open(slot_date, settings):
         return {"slots": []}
 
     schedule = (

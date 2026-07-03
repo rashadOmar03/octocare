@@ -132,6 +132,15 @@ def clean_legacy_invalid_data(db: Session) -> dict[str, int]:
 def run_startup_maintenance(db: Session) -> None:
     drop_spo2_column()
     clean_legacy_invalid_data(db)
+    from clinic_schedule import ensure_doctor_schedules
+
+    try:
+        changed = ensure_doctor_schedules(db)
+        if changed:
+            print(f"[Smart Clinic] Doctor schedules synced ({changed} rows)")
+    except Exception as exc:
+        db.rollback()
+        print(f"[Smart Clinic] Schedule sync warning: {exc}")
     from routers.records import sync_prescriptions_from_records
     from routers.prescriptions import expire_prescriptions
 

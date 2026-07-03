@@ -33,7 +33,7 @@ def _slots_overlap(slot_a: str, slot_b: str, duration_minutes: int) -> bool:
     return start_a < start_b + duration_minutes and start_b < start_a + duration_minutes
 
 
-def validate_booking_date(apt_date: date, user_role: str = "patient") -> None:
+def validate_booking_date(apt_date: date, user_role: str = "patient", db: Session | None = None) -> None:
     if apt_date < date.today():
         raise HTTPException(status_code=400, detail="Cannot book an appointment in the past.")
 
@@ -47,6 +47,17 @@ def validate_booking_date(apt_date: date, user_role: str = "patient") -> None:
                     "Please select tomorrow or a later date."
                 ),
             )
+        if db is not None:
+            from clinic_schedule import is_clinic_open, working_days_label
+            from models import ClinicSettings
+
+            settings = db.query(ClinicSettings).first()
+            if not is_clinic_open(apt_date, settings):
+                label = working_days_label(settings.working_days if settings else None)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"The clinic is closed on this day. Working days: {label}.",
+                )
 
 
 def slot_duration_minutes(db: Session) -> int:
