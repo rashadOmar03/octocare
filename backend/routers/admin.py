@@ -19,8 +19,10 @@ from schemas import (
     AdminDashboard, DoctorCreate, DoctorUpdate, DoctorResponse,
     SpecialtyCreate, SpecialtyResponse, ClinicSettingsUpdate, ClinicSettingsResponse,
     UserResponse, AdminUserListItem, AdminDoctorInfo, AdminCreate, AdminPatientDetailResponse,
-    ChartDataPoint, ReceptionistCreate, ReceptionistUpdate, DocumentResponse,
+    ChartDataPoint, ReceptionistCreate, ReceptionistUpdate, DocumentResponse, PurgePatientsRequest,
 )
+from audit_service import log_audit
+from patient_purge import purge_all_patients
 from auth import hash_password, require_role, get_current_user
 
 router = APIRouter()
@@ -648,6 +650,38 @@ def delete_user(
     )
     db.commit()
     return {"message": "User deleted"}
+
+
+@router.post("/purge-patients")
+def purge_patients(
+    data: PurgePatientsRequest,
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    """Permanently delete ALL patient accounts and related data. Staff accounts are kept."""
+    if data.confirm != "DELETE_ALL_PATIENTS":
+        raise HTTPException(
+            status_code=400,
+            detail='Send {"confirm": "DELETE_ALL_PATIENTS"} to proceed.',
+        )
+    stats = purge_all_patients(db)
+    log_audit(
+        db,
+        current_user.id,
+        "purge_all_patients",
+        "system",
+        "patients",
+        f"Admin purged all patients: {stats}",
+    )
+    db.commit()
+    _notify_staff(
+        db,
+        "Patient data reset",
+        f"All patient accounts were removed by admin ({stats.get('patients_deleted', 0)} patients).",
+        exclude_user_id=current_user.id,
+    )
+    db.commit()
+    return {"message": "All patients and related data deleted.", "stats": stats}
 
 
 @router.post("/specialties", response_model=SpecialtyResponse, status_code=status.HTTP_201_CREATED)

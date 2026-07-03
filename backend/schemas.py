@@ -902,6 +902,10 @@ class AdminCreate(BaseModel):
     blood_type: str = "Unknown"
 
 
+class PurgePatientsRequest(BaseModel):
+    confirm: str
+
+
 class AdminPatientDetailResponse(BaseModel):
     user: UserResponse
     profile_id: str
