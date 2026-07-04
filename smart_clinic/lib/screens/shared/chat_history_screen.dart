@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../l10n/localization.dart';
 import '../../services/api_service.dart';
@@ -109,6 +110,52 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     }
   }
 
+  Widget _buildDeleteHintBanner(ThemeData theme) {
+    final hint = kIsWeb || MediaQuery.sizeOf(context).width >= 600
+        ? AppLocalizations.tr('delete_chat_hint_desktop')
+        : AppLocalizations.tr('delete_chat_hint_mobile');
+    return Material(
+      color: theme.colorScheme.errorContainer.withValues(alpha: 0.35),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, size: 20, color: theme.colorScheme.error),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                hint,
+                style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeleteAction({required VoidCallback onPressed, bool compact = false}) {
+    final label = AppLocalizations.tr('delete_chat');
+    if (compact) {
+      return IconButton(
+        icon: const Icon(Icons.delete_outline, color: Colors.red),
+        tooltip: label,
+        onPressed: onPressed,
+      );
+    }
+    return TextButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+      label: Text(label, style: const TextStyle(color: Colors.red)),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -142,79 +189,96 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
                     ],
                   ),
                 )
-              : RefreshIndicator(
-                  onRefresh: _loadChats,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.only(top: 8, bottom: 80),
-                    itemCount: _chats.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (ctx, i) {
-                      final chat = _chats[i];
-                      final summary = chat['summary'] ?? 'Chat';
-                      final msgCount = chat['message_count'] ?? 0;
-                      final remaining = chat['remaining_messages'] ?? 50;
-                      final maxMsgs = chat['max_messages'] ?? 50;
-                      final updatedAt = _formatDate(chat['updated_at']?.toString());
+              : Column(
+                  children: [
+                    _buildDeleteHintBanner(theme),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _loadChats,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.only(top: 8, bottom: 80),
+                          itemCount: _chats.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (ctx, i) {
+                            final chat = _chats[i];
+                            final summary = chat['summary'] ?? 'Chat';
+                            final msgCount = chat['message_count'] ?? 0;
+                            final remaining = chat['remaining_messages'] ?? 50;
+                            final maxMsgs = chat['max_messages'] ?? 50;
+                            final updatedAt = _formatDate(chat['updated_at']?.toString());
+                            final wide = MediaQuery.sizeOf(context).width >= 600;
 
-                      return Dismissible(
-                        key: Key(chat['id']),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          color: Colors.red,
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 24),
-                          child: const Icon(Icons.delete, color: Colors.white),
-                        ),
-                        confirmDismiss: (_) => _confirmDeleteChat(chat['id']),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: remaining <= 5
-                                ? Colors.red.withValues(alpha: 0.1)
-                                : theme.colorScheme.primary.withValues(alpha: 0.1),
-                            child: Icon(
-                              Icons.chat_bubble_outline,
-                              color: remaining <= 5 ? Colors.red : theme.colorScheme.primary,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            summary,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Text(
-                            '$msgCount / $maxMsgs ${AppLocalizations.tr('messages_label')}  $updatedAt',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (remaining <= 5)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '$remaining left',
-                                    style: theme.textTheme.labelSmall?.copyWith(color: Colors.red),
+                            return Dismissible(
+                              key: Key(chat['id']),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                color: Colors.red,
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 24),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      AppLocalizations.tr('delete_chat'),
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Icon(Icons.delete, color: Colors.white),
+                                  ],
+                                ),
+                              ),
+                              confirmDismiss: (_) => _confirmDeleteChat(chat['id']),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: remaining <= 5
+                                      ? Colors.red.withValues(alpha: 0.1)
+                                      : theme.colorScheme.primary.withValues(alpha: 0.1),
+                                  child: Icon(
+                                    Icons.chat_bubble_outline,
+                                    color: remaining <= 5 ? Colors.red : theme.colorScheme.primary,
+                                    size: 20,
                                   ),
                                 ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                tooltip: AppLocalizations.tr('delete'),
-                                onPressed: () => _deleteChat(chat['id']),
+                                title: Text(
+                                  summary,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                subtitle: Text(
+                                  '$msgCount / $maxMsgs ${AppLocalizations.tr('messages_label')}  $updatedAt',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (remaining <= 5)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          '$remaining left',
+                                          style: theme.textTheme.labelSmall?.copyWith(color: Colors.red),
+                                        ),
+                                      ),
+                                    _buildDeleteAction(
+                                      compact: !wide,
+                                      onPressed: () => _deleteChat(chat['id']),
+                                    ),
+                                    const Icon(Icons.chevron_right, size: 20),
+                                  ],
+                                ),
+                                onTap: () => _openChat(chatId: chat['id']),
                               ),
-                              const Icon(Icons.chevron_right, size: 20),
-                            ],
-                          ),
-                          onTap: () => _openChat(chatId: chat['id']),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
     );
   }
@@ -272,23 +336,62 @@ class _ChatViewScreenState extends State<_ChatViewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final wide = MediaQuery.sizeOf(context).width >= 600;
     return Scaffold(
       appBar: AppBar(
         title: Text(AppLocalizations.tr('ai_assistant')),
         actions: [
           if (widget.chatId != null)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              color: Colors.red,
-              tooltip: AppLocalizations.tr('delete'),
-              onPressed: _deleteCurrentChat,
-            ),
+            wide
+                ? TextButton.icon(
+                    onPressed: _deleteCurrentChat,
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    label: Text(
+                      AppLocalizations.tr('delete_chat'),
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    color: Colors.red,
+                    tooltip: AppLocalizations.tr('delete_chat'),
+                    onPressed: _deleteCurrentChat,
+                  ),
         ],
       ),
-      body: AiChatPanel(
-        welcomeMessage: widget.welcomeMessage,
-        showDisclaimer: widget.showDisclaimer,
-        initialChatId: widget.chatId,
+      body: Column(
+        children: [
+          if (widget.chatId != null)
+            Material(
+              color: theme.colorScheme.errorContainer.withValues(alpha: 0.35),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline, size: 20, color: theme.colorScheme.error),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        wide
+                            ? AppLocalizations.tr('delete_chat_open_hint_desktop')
+                            : AppLocalizations.tr('delete_chat_open_hint_mobile'),
+                        style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Expanded(
+            child: AiChatPanel(
+              welcomeMessage: widget.welcomeMessage,
+              showDisclaimer: widget.showDisclaimer,
+              initialChatId: widget.chatId,
+            ),
+          ),
+        ],
       ),
     );
   }
