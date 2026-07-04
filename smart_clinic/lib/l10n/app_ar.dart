@@ -309,6 +309,7 @@ class AppStringsAr {
     'email_notifications': 'إشعارات البريد الإلكتروني',
     'sensor_readings': 'قراءات المستشعرات',
     'latest_readings': 'أحدث القراءات',
+    'signal_charts': 'مخططات الإشارة (ECG, EMG, GSR)',
     'paid_action_required_title': 'مواعيد مدفوعة تحتاج إجراء',
     'paid_action_required_body': 'هؤلاء المرضى دفعوا ولم يحضروا. قم باسترداد الدفع أو إعادة جدولة الموعد — المواعيد المدفوعة لا تُلغى تلقائياً.',
     'view_action_required': 'مراجعة الآن',

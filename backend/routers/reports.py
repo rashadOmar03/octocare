@@ -552,15 +552,12 @@ def _generate_patient_report(profile, db: Session):
 
         elements.append(Paragraph("Sensor Charts", subtitle_style))
         elements.append(Paragraph(
-            "Each chart plots saved clinic readings over time (oldest to newest). "
-            "Values match the history table above.",
+            "Waveform charts: ECG, EMG, and GSR only. Heart rate and temperature are shown as numbers in the table above.",
             body_style,
         ))
         elements.append(Spacer(1, 6))
 
         chart_specs = [
-            ("Heart Rate Chart", "Beats per minute (BPM). Normal resting: 60–100.", hr_points, "BPM", "#D32F2F"),
-            ("Temperature Chart", "Body temperature in °C. Normal: about 36.0–37.5.", temp_points, "°C", "#F57C00"),
             ("GSR Chart", "Galvanic skin response (stress/conductance).", gsr_points, "GSR", "#6A1B9A"),
             ("ECG Chart", "Electrocardiogram signal level from clinic sensor.", ecg_points, "ECG", "#C62828"),
             ("EMG Chart", "Electromyography signal level from clinic sensor.", emg_points, "EMG", "#00838F"),

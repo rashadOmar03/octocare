@@ -8,6 +8,7 @@ import '../../services/api_service.dart';
 import '../../services/sensor_reading.dart';
 import '../../services/sensor_service.dart';
 import '../../services/wifi_sensor_service.dart';
+import '../../widgets/sensor_waveform_chart.dart';
 
 class DoctorSensorScreen extends StatefulWidget {
   const DoctorSensorScreen({super.key});
@@ -644,6 +645,35 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(AppLocalizations.tr('signal_charts'), style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  SensorWaveformChart(
+                    title: AppLocalizations.tr('ecg'),
+                    shortLabel: 'ECG',
+                    samples: _ecgSamples,
+                    currentValue: _ecg ?? (_ecgSamples.isNotEmpty ? _ecgSamples.last : null),
+                    color: const Color(0xFFC62828),
+                    height: 120,
+                  ),
+                  const SizedBox(height: 8),
+                  SensorWaveformChart(
+                    title: AppLocalizations.tr('emg'),
+                    shortLabel: 'EMG',
+                    samples: _emgSamples,
+                    currentValue: _emg ?? (_emgSamples.isNotEmpty ? _emgSamples.last : null),
+                    color: const Color(0xFF00838F),
+                    height: 120,
+                  ),
+                  const SizedBox(height: 8),
+                  SensorWaveformChart(
+                    title: AppLocalizations.tr('gsr_waveform'),
+                    shortLabel: 'GSR',
+                    samples: _gsrSamples,
+                    currentValue: _gsr,
+                    color: const Color(0xFF6A1B9A),
+                    height: 120,
                   ),
                   const SizedBox(height: 24),
                   Row(

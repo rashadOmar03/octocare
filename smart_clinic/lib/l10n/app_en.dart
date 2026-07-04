@@ -309,6 +309,7 @@ class AppStringsEn {
     'email_notifications': 'Email Notifications',
     'sensor_readings': 'Sensor Readings',
     'latest_readings': 'Latest readings',
+    'signal_charts': 'Signal charts (ECG, EMG, GSR)',
     'paid_action_required_title': 'Paid visits need your action',
     'paid_action_required_body': 'These patients paid but missed their visit. Refund the payment or reschedule — paid appointments are not auto-cancelled.',
     'view_action_required': 'Review now',

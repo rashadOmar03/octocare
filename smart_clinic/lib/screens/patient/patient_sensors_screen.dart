@@ -4,6 +4,8 @@ import '../../l10n/localization.dart';
 import '../../services/sensor_service.dart';
 import '../../models/sensor_reading.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/sensor_waveform_chart.dart';
+import '../../widgets/sensor_history_chart.dart';
 
 class PatientSensorsScreen extends StatefulWidget {
   const PatientSensorsScreen({super.key});
@@ -118,6 +120,37 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
                 ],
               ),
             ),
+            if (_latest != null) ...[
+              const SizedBox(height: 20),
+              Text(AppLocalizations.tr('signal_charts'), style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              SensorWaveformChart(
+                title: AppLocalizations.tr('ecg'),
+                shortLabel: 'ECG',
+                samples: _latest!.waveformSamples('ecg'),
+                currentValue: _latest!.ecg,
+                color: const Color(0xFFC62828),
+                height: 120,
+              ),
+              const SizedBox(height: 8),
+              SensorWaveformChart(
+                title: AppLocalizations.tr('emg'),
+                shortLabel: 'EMG',
+                samples: _latest!.waveformSamples('emg'),
+                currentValue: _latest!.emg,
+                color: const Color(0xFF00838F),
+                height: 120,
+              ),
+              const SizedBox(height: 8),
+              SensorWaveformChart(
+                title: AppLocalizations.tr('gsr_waveform'),
+                shortLabel: 'GSR',
+                samples: _latest!.waveformSamples('gsr'),
+                currentValue: _latest!.gsr,
+                color: const Color(0xFF6A1B9A),
+                height: 120,
+              ),
+            ],
             const SizedBox(height: 24),
             Text(AppLocalizations.tr('history'), style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
@@ -132,6 +165,8 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
                 Tab(text: AppLocalizations.tr('monthly')),
               ],
             ),
+            const SizedBox(height: 16),
+            _buildSignalHistoryCharts(),
             const SizedBox(height: 16),
             _buildHistoryTable(),
           ],
@@ -214,6 +249,48 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSignalHistoryCharts() {
+    if (_history.isEmpty) {
+      return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(AppLocalizations.tr('no_data'))));
+    }
+
+    final ordered = _history.reversed.toList();
+    final gsr = ordered.map((r) => r.gsr).whereType<double>().where((v) => v > 0).toList();
+    final ecg = ordered.map((r) => r.ecg).whereType<double>().where((v) => v > 0).toList();
+    final emg = ordered.map((r) => r.emg).whereType<double>().where((v) => v > 0).toList();
+
+    return Column(
+      children: [
+        if (ecg.isNotEmpty)
+          SensorHistoryChart(
+            title: AppLocalizations.tr('ecg'),
+            description: AppLocalizations.tr('ecg_chart_desc'),
+            unit: '',
+            color: const Color(0xFFC62828),
+            values: ecg,
+          ),
+        if (emg.isNotEmpty)
+          SensorHistoryChart(
+            title: AppLocalizations.tr('emg'),
+            description: AppLocalizations.tr('emg_chart_desc'),
+            unit: '',
+            color: const Color(0xFF00838F),
+            values: emg,
+          ),
+        if (gsr.isNotEmpty)
+          SensorHistoryChart(
+            title: AppLocalizations.tr('gsr'),
+            description: AppLocalizations.tr('gsr_chart_desc'),
+            unit: '',
+            color: const Color(0xFF6A1B9A),
+            values: gsr,
+          ),
+        if (gsr.isEmpty && ecg.isEmpty && emg.isEmpty)
+          Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(AppLocalizations.tr('no_data')))),
+      ],
     );
   }
 
