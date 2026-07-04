@@ -58,6 +58,15 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _refreshPhoto() async {
+    try {
+      final response = await ApiService.instance.get('/patients/profile');
+      if (mounted) {
+        setState(() => _profileData['photo_url'] = response['photo_url']);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadProfile() async {
     setState(() {
       _isLoading = true;
@@ -215,7 +224,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 ProfileAvatar(
                   photoUrl: _profileData['photo_url'],
                   name: _profileData['first_name'],
-                  onPhotoChanged: _loadProfile,
+                  onPhotoChanged: _refreshPhoto,
                 ),
                 const SizedBox(height: 12),
                 Text('${_profileData['first_name'] ?? ''} ${_profileData['last_name'] ?? ''}', style: Theme.of(context).textTheme.titleLarge),

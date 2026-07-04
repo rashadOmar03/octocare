@@ -52,6 +52,15 @@ class _ReceptionistProfileScreenState extends State<ReceptionistProfileScreen> {
     _addressController.text = (_profileData['address'] ?? '').toString();
   }
 
+  Future<void> _refreshPhoto() async {
+    try {
+      final response = await ApiService.instance.get('/patients/profile');
+      if (mounted) {
+        setState(() => _profileData['photo_url'] = response['photo_url']);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadProfile() async {
     setState(() {
       _isLoading = true;
@@ -144,7 +153,7 @@ class _ReceptionistProfileScreenState extends State<ReceptionistProfileScreen> {
                 ProfileAvatar(
                   photoUrl: _profileData['photo_url'],
                   name: _profileData['first_name']?.toString() ?? user?.firstName,
-                  onPhotoChanged: _loadProfile,
+                  onPhotoChanged: _refreshPhoto,
                 ),
                 const SizedBox(height: 12),
                 Text(user?.fullName ?? '', style: Theme.of(context).textTheme.titleLarge),

@@ -279,14 +279,31 @@ def get_update_requests(
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-ALLOWED_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif"}
-ALLOWED_DOC_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx"}
+ALLOWED_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+ALLOWED_DOC_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".doc", ".docx"}
 MAX_PHOTO_SIZE = 5 * 1024 * 1024   # 5 MB
 MAX_DOC_SIZE = 10 * 1024 * 1024    # 10 MB
 
 
+def _normalize_photo_extension(filename: str | None, content_type: str | None = None) -> str:
+    ext = os.path.splitext(filename or "")[1].lower()
+    if ext in ALLOWED_PHOTO_EXTENSIONS:
+        return ext
+    if content_type:
+        ct = content_type.lower()
+        if "jpeg" in ct or "jpg" in ct:
+            return ".jpg"
+        if "png" in ct:
+            return ".png"
+        if "gif" in ct:
+            return ".gif"
+        if "webp" in ct:
+            return ".webp"
+    return ".jpg"
+
+
 def _validate_upload(file: UploadFile, allowed_exts: set, max_size: int, content: bytes) -> None:
-    ext = os.path.splitext(file.filename or "")[1].lower()
+    ext = _normalize_photo_extension(file.filename, file.content_type) if allowed_exts == ALLOWED_PHOTO_EXTENSIONS else os.path.splitext(file.filename or "")[1].lower()
     if ext not in allowed_exts:
         raise HTTPException(
             status_code=400,
@@ -321,14 +338,15 @@ async def upload_profile_photo(
     content = await file.read()
     _validate_upload(file, ALLOWED_PHOTO_EXTENSIONS, MAX_PHOTO_SIZE, content)
 
-    ext = os.path.splitext(file.filename or "photo.jpg")[1]
+    ext = _normalize_photo_extension(file.filename, file.content_type)
     safe_name = f"avatar_{current_user.id}{ext}"
     file_path = os.path.join(UPLOAD_DIR, safe_name)
 
     with open(file_path, "wb") as f:
         f.write(content)
 
-    profile.photo_url = f"/uploads/{safe_name}"
+    version = int(datetime.utcnow().timestamp())
+    profile.photo_url = f"/uploads/{safe_name}?v={version}"
     db.commit()
     db.refresh(profile)
 

@@ -51,6 +51,15 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     _addressController.text = (_profileData['address'] ?? '').toString();
   }
 
+  Future<void> _refreshPhoto() async {
+    try {
+      final response = await ApiService.instance.get('/patients/profile');
+      if (mounted) {
+        setState(() => _profileData['photo_url'] = response['photo_url']);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadProfile() async {
     setState(() => _isLoading = true);
     try {
@@ -118,7 +127,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       children: [
-                        ProfileAvatar(photoUrl: _profileData['photo_url'], name: user?.firstName, onPhotoChanged: _loadProfile),
+                        ProfileAvatar(photoUrl: _profileData['photo_url'], name: user?.firstName, onPhotoChanged: _refreshPhoto),
                         const SizedBox(height: 12),
                         if (_isEditing) ...[
                           CustomTextField(controller: _firstNameController, label: AppLocalizations.tr('first_name')),

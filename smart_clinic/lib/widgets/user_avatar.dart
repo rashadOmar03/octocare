@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../config/api_config.dart';
 import '../services/api_service.dart';
 import '../providers/auth_provider.dart';
+import '../utils/photo_url_utils.dart';
 
 class UserAvatar extends StatefulWidget {
   final String? name;
@@ -24,11 +24,12 @@ class UserAvatar extends StatefulWidget {
 
 class UserAvatarState extends State<UserAvatar> {
   String? _photoUrl;
+  bool _imageFailed = false;
 
   @override
   void initState() {
     super.initState();
-    _photoUrl = widget.photoUrl;
+    _photoUrl = PhotoUrlUtils.normalizePath(widget.photoUrl);
     if (widget.loadFromApi) _loadPhoto();
   }
 
@@ -36,7 +37,8 @@ class UserAvatarState extends State<UserAvatar> {
   void didUpdateWidget(UserAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.photoUrl != oldWidget.photoUrl) {
-      _photoUrl = widget.photoUrl;
+      _photoUrl = PhotoUrlUtils.normalizePath(widget.photoUrl);
+      _imageFailed = false;
     }
   }
 
@@ -45,39 +47,35 @@ class UserAvatarState extends State<UserAvatar> {
   Future<void> _loadPhoto() async {
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
-      final role = auth.userRole;
-      if (role != 'patient') {
-        final photo = auth.currentUser?.profilePhoto;
-        if (photo != null && mounted) {
-          setState(() => _photoUrl = photo);
-        }
-        return;
-      }
       final response = await ApiService.instance.get('/patients/profile');
       if (mounted && response['photo_url'] != null) {
         final url = response['photo_url'] as String;
-        setState(() => _photoUrl = url);
+        setState(() {
+          _photoUrl = url;
+          _imageFailed = false;
+        });
         await auth.updateProfilePhoto(url);
       }
     } catch (_) {}
   }
 
+  String? _resolvedPath(String? authPhoto) {
+    return PhotoUrlUtils.normalizePath(_photoUrl) ??
+        PhotoUrlUtils.normalizePath(authPhoto) ??
+        PhotoUrlUtils.normalizePath(widget.photoUrl);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final String? resolvedUrl;
-    if (widget.loadFromApi) {
-      final authPhoto = context.watch<AuthProvider>().currentUser?.profilePhoto;
-      resolvedUrl = _photoUrl ?? authPhoto ?? widget.photoUrl;
-    } else {
-      resolvedUrl = widget.photoUrl ?? _photoUrl;
-    }
+    final authPhoto = context.watch<AuthProvider>().currentUser?.profilePhoto;
+    final path = widget.loadFromApi ? _resolvedPath(authPhoto) : PhotoUrlUtils.normalizePath(widget.photoUrl ?? _photoUrl);
     final initial = (widget.name?.isNotEmpty == true) ? widget.name![0].toUpperCase() : '?';
+    final colors = Theme.of(context).colorScheme;
 
     return CircleAvatar(
       radius: widget.radius,
-      backgroundColor: Theme.of(context).colorScheme.primary,
-      backgroundImage: resolvedUrl != null ? NetworkImage('${ApiConfig.url}$resolvedUrl') : null,
-      child: resolvedUrl == null
+      backgroundColor: colors.primary,
+      child: path == null || _imageFailed
           ? Text(
               initial,
               style: TextStyle(
@@ -86,7 +84,27 @@ class UserAvatarState extends State<UserAvatar> {
                 fontWeight: FontWeight.bold,
               ),
             )
-          : null,
+          : ClipOval(
+              child: Image.network(
+                PhotoUrlUtils.fullUrl(path),
+                width: widget.radius * 2,
+                height: widget.radius * 2,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted && !_imageFailed) setState(() => _imageFailed = true);
+                  });
+                  return Text(
+                    initial,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: widget.radius * 0.78,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                },
+              ),
+            ),
     );
   }
 }

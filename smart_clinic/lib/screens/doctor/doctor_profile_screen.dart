@@ -58,6 +58,15 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     _bioController.text = (_profileData['bio'] ?? '').toString();
   }
 
+  Future<void> _refreshPhoto() async {
+    try {
+      final response = await ApiService.instance.get('/doctors/me');
+      if (mounted) {
+        setState(() => _profileData['photo_url'] = response['photo_url']);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadProfile() async {
     setState(() {
       _isLoading = true;
@@ -149,7 +158,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         ProfileAvatar(
                           photoUrl: _profileData['photo_url'],
                           name: _profileData['first_name']?.toString() ?? user?.firstName,
-                          onPhotoChanged: _loadProfile,
+                          onPhotoChanged: _refreshPhoto,
                         ),
                         const SizedBox(height: 12),
                         if (_isEditing) ...[
