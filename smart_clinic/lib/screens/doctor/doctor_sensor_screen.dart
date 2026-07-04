@@ -8,7 +8,6 @@ import '../../services/api_service.dart';
 import '../../services/sensor_reading.dart';
 import '../../services/sensor_service.dart';
 import '../../services/wifi_sensor_service.dart';
-import '../../widgets/sensor_waveform_chart.dart';
 
 class DoctorSensorScreen extends StatefulWidget {
   const DoctorSensorScreen({super.key});
@@ -19,7 +18,7 @@ class DoctorSensorScreen extends StatefulWidget {
 
 class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
   static const int _waveformCapacity = 250;
-  static const Duration _uiRefreshInterval = Duration(milliseconds: 33);
+  static const Duration _uiRefreshInterval = Duration(milliseconds: 16);
 
   final SensorService _sensorService = SensorService();
   final WifiSensorService _wifi = WifiSensorService.instance;
@@ -39,6 +38,8 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
   double? _heartRate;
   double? _temperature;
   double? _gsr;
+  double? _ecg;
+  double? _emg;
   final List<double> _ecgSamples = [];
   final List<double> _emgSamples = [];
   final List<double> _gsrSamples = [];
@@ -130,6 +131,8 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
     _heartRate = null;
     _temperature = null;
     _gsr = null;
+    _ecg = null;
+    _emg = null;
     _ecgSamples.clear();
     _emgSamples.clear();
     _gsrSamples.clear();
@@ -324,11 +327,17 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
         _appendSample(_tempSamples, reading.temperature!);
       }
     }
-    if (reading.ecg != null && _isMeasuring) {
-      _appendSample(_ecgSamples, reading.ecg!);
+    if (reading.ecg != null) {
+      _ecg = reading.ecg;
+      if (_isMeasuring) {
+        _appendSample(_ecgSamples, reading.ecg!);
+      }
     }
-    if (reading.emg != null && _isMeasuring) {
-      _appendSample(_emgSamples, reading.emg!);
+    if (reading.emg != null) {
+      _emg = reading.emg;
+      if (_isMeasuring) {
+        _appendSample(_emgSamples, reading.emg!);
+      }
     }
     if (reading.gsr != null) {
       _gsr = reading.gsr;
@@ -347,7 +356,8 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
       _heartRate = null;
       _temperature = null;
       _gsr = null;
-      _ecgSamples.clear();
+      _ecg = null;
+      _emg = null;
       _emgSamples.clear();
       _gsrSamples.clear();
       _bpmSamples.clear();
@@ -587,80 +597,53 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildVitalCard(
+                  Text(AppLocalizations.tr('latest_readings'), style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildVitalCard(
                           AppLocalizations.tr('heart_rate'),
                           _heartRate,
                           AppLocalizations.tr('bpm'),
                           Icons.favorite,
                           const Color(0xFFD32F2F),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildVitalCard(
+                        const SizedBox(width: 8),
+                        _buildVitalCard(
                           AppLocalizations.tr('temperature'),
                           _temperature,
                           '°C',
                           Icons.thermostat,
                           const Color(0xFFF57C00),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildVitalCard(
+                        const SizedBox(width: 8),
+                        _buildVitalCard(
                           AppLocalizations.tr('gsr'),
                           _gsr,
                           '',
                           Icons.bolt,
                           const Color(0xFF6A1B9A),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SensorWaveformChart(
-                    title: AppLocalizations.tr('heart_rate'),
-                    shortLabel: 'BPM',
-                    samples: _bpmSamples,
-                    currentValue: _heartRate,
-                    unit: AppLocalizations.tr('bpm'),
-                    color: const Color(0xFFD32F2F),
-                  ),
-                  const SizedBox(height: 8),
-                  SensorWaveformChart(
-                    title: AppLocalizations.tr('temperature'),
-                    shortLabel: 'TEMP',
-                    samples: _tempSamples,
-                    currentValue: _temperature,
-                    unit: '°C',
-                    color: const Color(0xFFF57C00),
-                  ),
-                  const SizedBox(height: 8),
-                  SensorWaveformChart(
-                    title: AppLocalizations.tr('ecg'),
-                    shortLabel: 'ECG',
-                    samples: _ecgSamples,
-                    currentValue: _ecgSamples.isNotEmpty ? _ecgSamples.last : null,
-                    color: const Color(0xFFD32F2F),
-                  ),
-                  const SizedBox(height: 8),
-                  SensorWaveformChart(
-                    title: AppLocalizations.tr('emg'),
-                    shortLabel: 'EMG',
-                    samples: _emgSamples,
-                    currentValue: _emgSamples.isNotEmpty ? _emgSamples.last : null,
-                    color: const Color(0xFF1565C0),
-                  ),
-                  const SizedBox(height: 8),
-                  SensorWaveformChart(
-                    title: AppLocalizations.tr('gsr_waveform'),
-                    shortLabel: 'GSR',
-                    samples: _gsrSamples,
-                    currentValue: _gsr,
-                    color: const Color(0xFF6A1B9A),
+                        const SizedBox(width: 8),
+                        _buildVitalCard(
+                          AppLocalizations.tr('ecg'),
+                          _ecg,
+                          '',
+                          Icons.monitor_heart_outlined,
+                          const Color(0xFFC62828),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildVitalCard(
+                          AppLocalizations.tr('emg'),
+                          _emg,
+                          '',
+                          Icons.fitness_center,
+                          const Color(0xFF00838F),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Row(
@@ -702,7 +685,9 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
   }
 
   Widget _buildVitalCard(String title, double? value, String unit, IconData icon, Color color) {
-    return Card(
+    return SizedBox(
+      width: 110,
+      child: Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         child: Column(
@@ -729,6 +714,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }

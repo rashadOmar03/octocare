@@ -4,8 +4,6 @@ import '../../l10n/localization.dart';
 import '../../services/sensor_service.dart';
 import '../../models/sensor_reading.dart';
 import '../../widgets/loading_widget.dart';
-import '../../widgets/sensor_waveform_chart.dart';
-import '../../widgets/sensor_history_chart.dart';
 
 class PatientSensorsScreen extends StatefulWidget {
   const PatientSensorsScreen({super.key});
@@ -102,6 +100,8 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
           children: [
             _buildAlertsSection(),
             const SizedBox(height: 16),
+            Text(AppLocalizations.tr('latest_readings'), style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -118,30 +118,6 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
                 ],
               ),
             ),
-            if (_latest != null) ...[
-              const SizedBox(height: 12),
-              SensorWaveformChart(
-                title: AppLocalizations.tr('ecg'),
-                shortLabel: 'ECG',
-                samples: _latest!.waveformSamples('ecg'),
-                currentValue: _latest!.ecg,
-                color: const Color(0xFFC62828),
-              ),
-              SensorWaveformChart(
-                title: AppLocalizations.tr('emg'),
-                shortLabel: 'EMG',
-                samples: _latest!.waveformSamples('emg'),
-                currentValue: _latest!.emg,
-                color: const Color(0xFF00838F),
-              ),
-              SensorWaveformChart(
-                title: AppLocalizations.tr('gsr_waveform'),
-                shortLabel: 'GSR',
-                samples: _latest!.waveformSamples('gsr'),
-                currentValue: _latest!.gsr,
-                color: const Color(0xFF6A1B9A),
-              ),
-            ],
             const SizedBox(height: 24),
             Text(AppLocalizations.tr('history'), style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
@@ -156,8 +132,6 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
                 Tab(text: AppLocalizations.tr('monthly')),
               ],
             ),
-            const SizedBox(height: 16),
-            _buildHistoryCharts(),
             const SizedBox(height: 16),
             _buildHistoryTable(),
           ],
@@ -240,48 +214,6 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildHistoryCharts() {
-    if (_history.isEmpty) {
-      return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(AppLocalizations.tr('no_data'))));
-    }
-
-    final ordered = _history.reversed.toList();
-    final hr = ordered.map((r) => r.heartRate).whereType<double>().where((v) => v > 0).toList();
-    final temp = ordered.map((r) => r.temperature).whereType<double>().where((v) => v > 0).toList();
-    final gsr = ordered.map((r) => r.gsr).whereType<double>().where((v) => v > 0).toList();
-
-    return Column(
-      children: [
-        if (hr.isNotEmpty)
-          SensorHistoryChart(
-            title: AppLocalizations.tr('heart_rate'),
-            description: AppLocalizations.tr('hr_chart_desc'),
-            unit: AppLocalizations.tr('bpm'),
-            color: const Color(0xFFD32F2F),
-            values: hr,
-          ),
-        if (temp.isNotEmpty)
-          SensorHistoryChart(
-            title: AppLocalizations.tr('temperature'),
-            description: AppLocalizations.tr('temp_chart_desc'),
-            unit: '°C',
-            color: const Color(0xFFF57C00),
-            values: temp,
-          ),
-        if (gsr.isNotEmpty)
-          SensorHistoryChart(
-            title: AppLocalizations.tr('gsr'),
-            description: AppLocalizations.tr('gsr_chart_desc'),
-            unit: '',
-            color: const Color(0xFF6A1B9A),
-            values: gsr,
-          ),
-        if (hr.isEmpty && temp.isEmpty && gsr.isEmpty)
-          Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(AppLocalizations.tr('no_data')))),
-      ],
     );
   }
 

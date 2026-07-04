@@ -308,27 +308,35 @@ class _ChartFlowable(Flowable):
         renderPDF.draw(self.drawing, self.canv, 0, 0)
 
 
-def _make_line_chart(title: str, description: str, values: list[float], ylabel: str, color: str) -> Drawing:
-    width, chart_height = 460, 100
-    total_height = chart_height + 50
+def _make_line_chart(
+    title: str,
+    description: str,
+    points: list[tuple[str, float]],
+    ylabel: str,
+    color: str,
+) -> Drawing:
+    width, chart_height = 460, 110
+    total_height = chart_height + 54
     d = Drawing(width, total_height)
     d.add(String(0, total_height - 18, title, fontSize=11, fillColor=colors.HexColor("#2c3e50")))
     d.add(String(0, total_height - 32, description, fontSize=8, fillColor=colors.grey))
 
-    if not values:
+    if not points:
         d.add(String(0, 40, "No data", fontSize=9))
         return d
 
+    values = [v for _, v in points]
+    labels = [lbl for lbl, _ in points]
     min_v = min(values)
     max_v = max(values)
     spread = max(max_v - min_v, 1.0)
-    pad = spread * 0.15
+    pad = spread * 0.12
     min_y = min_v - pad
     max_y = max_v + pad
 
-    x0, y0 = 45, 12
-    plot_w = width - 60
-    plot_h = chart_height - 10
+    x0, y0 = 48, 14
+    plot_w = width - 62
+    plot_h = chart_height - 12
 
     d.add(Line(x0, y0, x0, y0 + plot_h, strokeColor=colors.HexColor("#bdc3c7")))
     d.add(Line(x0, y0, x0 + plot_w, y0, strokeColor=colors.HexColor("#bdc3c7")))
@@ -338,22 +346,23 @@ def _make_line_chart(title: str, description: str, values: list[float], ylabel: 
         frac = tick / 4
         y_val = min_y + frac * (max_y - min_y)
         y = y0 + frac * plot_h
-        d.add(String(2, y - 3, f"{y_val:.0f}", fontSize=6, fillColor=colors.grey))
+        d.add(String(2, y - 3, f"{y_val:.1f}", fontSize=6, fillColor=colors.grey))
         d.add(Line(x0, y, x0 + plot_w, y, strokeColor=colors.HexColor("#ecf0f1"), strokeWidth=0.5))
 
-    points = []
+    poly_points: list[float] = []
     n = len(values)
-    for i, v in enumerate(values):
+    for i, (label, v) in enumerate(zip(labels, values)):
         x = x0 + (i / max(n - 1, 1)) * plot_w
         y = y0 + ((v - min_y) / (max_y - min_y)) * plot_h
-        points.extend([x, y])
-        d.add(String(x - 6, y + 5, f"{v:.0f}", fontSize=6, fillColor=colors.HexColor(color)))
-        d.add(String(x - 4, y0 - 10, str(i + 1), fontSize=6, fillColor=colors.grey))
+        poly_points.extend([x, y])
+        d.add(String(x - 8, y + 4, f"{v:.1f}", fontSize=6, fillColor=colors.HexColor(color)))
+        short_label = label if len(label) <= 10 else label[:9] + "…"
+        d.add(String(x - 10, y0 - 10, short_label, fontSize=5, fillColor=colors.grey))
 
-    if len(points) >= 4:
-        d.add(PolyLine(points, strokeColor=colors.HexColor(color), strokeWidth=1.5))
+    if len(poly_points) >= 4:
+        d.add(PolyLine(poly_points, strokeColor=colors.HexColor(color), strokeWidth=1.8))
 
-    d.add(String(x0, 0, "Reading # (oldest → newest)", fontSize=7, fillColor=colors.grey))
+    d.add(String(x0, 0, "Oldest reading → newest (left to right)", fontSize=7, fillColor=colors.grey))
     return d
 
 
@@ -521,41 +530,47 @@ def _generate_patient_report(profile, db: Session):
         elements.append(Spacer(1, 14))
 
         ordered = list(reversed(sensors[:15]))
-        hr_vals = [float(s.heart_rate) for s in ordered if s.heart_rate and s.heart_rate > 0]
-        temp_vals = [float(s.temperature) for s in ordered if s.temperature and s.temperature > 0]
-        gsr_vals = [float(s.gsr) for s in ordered if s.gsr and s.gsr > 0]
+        label_for = lambda s: s.timestamp.strftime("%m/%d %H:%M") if s.timestamp else "-"
+
+        def _points(field: str) -> list[tuple[str, float]]:
+            out: list[tuple[str, float]] = []
+            for s in ordered:
+                val = getattr(s, field, None)
+                if val is None:
+                    continue
+                fv = float(val)
+                if fv <= 0:
+                    continue
+                out.append((label_for(s), fv))
+            return out
+
+        hr_points = _points("heart_rate")
+        temp_points = _points("temperature")
+        gsr_points = _points("gsr")
+        ecg_points = _points("ecg")
+        emg_points = _points("emg")
 
         elements.append(Paragraph("Sensor Charts", subtitle_style))
         elements.append(Paragraph(
-            "Each chart shows one vital sign over time. Numbers on the chart are the exact readings. "
-            "Older saves may only have heart rate and temperature.",
+            "Each chart plots saved clinic readings over time (oldest to newest). "
+            "Values match the history table above.",
             body_style,
         ))
         elements.append(Spacer(1, 6))
 
-        if hr_vals:
-            chart = _make_line_chart(
-                "Heart Rate Chart",
-                "Beats per minute (BPM) at each clinic visit. Normal resting: 60–100.",
-                hr_vals, "BPM", "#D32F2F",
-            )
-            elements.append(_ChartFlowable(chart, 460, 150))
+        chart_specs = [
+            ("Heart Rate Chart", "Beats per minute (BPM). Normal resting: 60–100.", hr_points, "BPM", "#D32F2F"),
+            ("Temperature Chart", "Body temperature in °C. Normal: about 36.0–37.5.", temp_points, "°C", "#F57C00"),
+            ("GSR Chart", "Galvanic skin response (stress/conductance).", gsr_points, "GSR", "#6A1B9A"),
+            ("ECG Chart", "Electrocardiogram signal level from clinic sensor.", ecg_points, "ECG", "#C62828"),
+            ("EMG Chart", "Electromyography signal level from clinic sensor.", emg_points, "EMG", "#00838F"),
+        ]
+        for title, desc, pts, ylab, col in chart_specs:
+            if not pts:
+                continue
+            chart = _make_line_chart(title, desc, pts, ylab, col)
+            elements.append(_ChartFlowable(chart, 460, 164))
             elements.append(Spacer(1, 8))
-        if temp_vals:
-            chart = _make_line_chart(
-                "Temperature Chart",
-                "Body temperature in °C at each visit. Normal: about 36.0–37.5.",
-                temp_vals, "°C", "#F57C00",
-            )
-            elements.append(_ChartFlowable(chart, 460, 150))
-            elements.append(Spacer(1, 8))
-        if gsr_vals:
-            chart = _make_line_chart(
-                "GSR Chart",
-                "Galvanic skin response — skin conductance/stress indicator.",
-                gsr_vals, "GSR", "#6A1B9A",
-            )
-            elements.append(_ChartFlowable(chart, 460, 150))
 
     doc.build(
         elements,

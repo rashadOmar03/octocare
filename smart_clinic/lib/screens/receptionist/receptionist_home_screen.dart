@@ -98,6 +98,27 @@ class _ReceptionistHomeScreenState extends State<ReceptionistHomeScreen> {
                   ),
                   const SizedBox(height: 12),
                   receptionistQuickActions(context),
+                  if (dash != null && dash.actionRequired > 0) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      color: const Color(0xFFF57C00).withValues(alpha: 0.12),
+                      child: ListTile(
+                        leading: const Icon(Icons.warning_amber_rounded, color: Color(0xFFF57C00)),
+                        title: Text(
+                          AppLocalizations.tr('paid_action_required_title'),
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(AppLocalizations.tr('paid_action_required_body')),
+                        isThreeLine: true,
+                        trailing: Chip(
+                          label: Text('${dash.actionRequired}'),
+                          backgroundColor: const Color(0xFFF57C00),
+                          labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                        onTap: () => Navigator.pushNamed(context, AppRoutes.receptionistAppointments),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   if (dash != null)
                     Card(

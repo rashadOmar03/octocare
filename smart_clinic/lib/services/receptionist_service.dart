@@ -9,6 +9,7 @@ class ReceptionistDashboardData {
   final int completed;
   final int arrived;
   final double todayRevenue;
+  final int actionRequired;
 
   ReceptionistDashboardData({
     required this.todayAppointments,
@@ -17,6 +18,7 @@ class ReceptionistDashboardData {
     required this.completed,
     required this.arrived,
     required this.todayRevenue,
+    this.actionRequired = 0,
   });
 
   factory ReceptionistDashboardData.fromJson(Map<String, dynamic> json) {
@@ -27,6 +29,7 @@ class ReceptionistDashboardData {
       completed: json['completed_appointments'] ?? 0,
       arrived: json['arrived_appointments'] ?? 0,
       todayRevenue: (json['today_revenue'] as num?)?.toDouble() ?? 0,
+      actionRequired: json['action_required_appointments'] ?? 0,
     );
   }
 }
@@ -147,6 +150,14 @@ class ReceptionistService {
       );
     }
     return AppointmentService().getAppointments(status: status);
+  }
+
+  Future<List<Appointment>> getActionRequiredAppointments() async {
+    final response = await _api.get('/receptionist/action-required-appointments');
+    final list = response is List ? response : (response['results'] ?? []);
+    return List<Appointment>.from(
+      (list as List).map((e) => Appointment.fromJson(Map<String, dynamic>.from(e as Map))),
+    );
   }
 
   Future<List<Appointment>> getQueue({String? doctorId, String? date}) async {

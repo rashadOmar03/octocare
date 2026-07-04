@@ -787,6 +787,7 @@ class ReceptionistDashboard(BaseModel):
     completed_appointments: int
     arrived_appointments: int = 0
     today_revenue: float
+    action_required_appointments: int = 0
 
 
 class ReceptionistRevenueSummary(BaseModel):

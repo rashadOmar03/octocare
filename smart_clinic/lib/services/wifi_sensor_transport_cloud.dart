@@ -58,7 +58,7 @@ class CloudPollWifiSensorTransport implements WifiSensorTransport {
     }
 
     await pollOnce(strict: true);
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => pollOnce(strict: false));
+    _timer = Timer.periodic(const Duration(milliseconds: 150), (_) => pollOnce(strict: false));
   }
 
   @override

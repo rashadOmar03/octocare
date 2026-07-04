@@ -4,7 +4,7 @@ from datetime import datetime, date, timedelta
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from models import Appointment, ClinicSettings, Payment
+from models import Appointment, ClinicSettings, Payment, AuditLog
 from audit_service import log_audit
 from clinic_time import clinic_now
 
@@ -175,10 +175,69 @@ def require_active_paid_visit_for_patient(
     return apt
 
 
+def _paid_no_show_alert_sent(db: Session, appointment_id: str) -> bool:
+    return (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.entity_type == "appointment",
+            AuditLog.entity_id == appointment_id,
+            AuditLog.action == "paid_no_show_alert",
+        )
+        .first()
+        is not None
+    )
+
+
+def count_paid_no_show_action_required(db: Session) -> int:
+    """Paid confirmed/arrived visits past appointment date — receptionist must refund or reschedule."""
+    today = clinic_now().date()
+    paid_ids = {
+        row[0]
+        for row in db.query(Payment.appointment_id)
+        .filter(Payment.payment_status == "paid")
+        .all()
+    }
+    if not paid_ids:
+        return 0
+    return (
+        db.query(Appointment)
+        .filter(
+            Appointment.id.in_(paid_ids),
+            Appointment.status.in_(NO_SHOW_STATUSES),
+            Appointment.date < today,
+        )
+        .count()
+    )
+
+
+def list_paid_no_show_action_required(db: Session, limit: int = 50) -> list[Appointment]:
+    today = clinic_now().date()
+    paid_ids = {
+        row[0]
+        for row in db.query(Payment.appointment_id)
+        .filter(Payment.payment_status == "paid")
+        .all()
+    }
+    if not paid_ids:
+        return []
+    return (
+        db.query(Appointment)
+        .filter(
+            Appointment.id.in_(paid_ids),
+            Appointment.status.in_(NO_SHOW_STATUSES),
+            Appointment.date < today,
+        )
+        .order_by(Appointment.date.desc(), Appointment.time_slot.desc())
+        .limit(limit)
+        .all()
+    )
+
+
 def auto_cancel_expired_appointments(db: Session) -> int:
     """
     - Pending: cancel after time slot ends (unconfirmed booking expired).
-    - Confirmed/arrived: cancel if appointment day passed and visit not completed (no-show).
+    - Confirmed/arrived unpaid: cancel if appointment day passed (no-show).
+    - Confirmed/arrived paid: do NOT auto-cancel — alert receptionist to refund or reschedule.
     Same-day confirmed patients are kept until the day ends.
     """
     duration = _get_duration(db)
@@ -224,27 +283,39 @@ def auto_cancel_expired_appointments(db: Session) -> int:
         .all()
     )
     for apt in no_shows:
+        if _appointment_is_paid(db, apt.id):
+            if not _paid_no_show_alert_sent(db, apt.id):
+                from routers.appointments import _get_patient_name, _notify_staff
+                patient_name = _get_patient_name(db, apt.patient_id)
+                log_audit(
+                    db,
+                    None,
+                    "paid_no_show_alert",
+                    "appointment",
+                    apt.id,
+                    f"Paid no-show on {apt.date} {apt.time_slot} — refund or reschedule required",
+                )
+                _notify_staff(
+                    db,
+                    "Paid visit needs action",
+                    (
+                        f"{patient_name} missed their paid appointment on {apt.date} at {apt.time_slot}. "
+                        "Refund the payment or reschedule — paid appointments cannot be auto-cancelled."
+                    ),
+                )
+                changed += 1
+            continue
+
         apt.status = "cancelled"
         apt.queue_number = None
-        paid_note = " (payment still on file — refund if needed)" if _appointment_is_paid(db, apt.id) else ""
         log_audit(
             db,
             None,
             "auto_cancel_no_show",
             "appointment",
             apt.id,
-            f"Patient did not complete visit on {apt.date}{paid_note}",
+            f"Patient did not complete visit on {apt.date}",
         )
-        if _appointment_is_paid(db, apt.id):
-            try:
-                from routers.appointments import _notify_staff
-                _notify_staff(
-                    db,
-                    "No-show — refund required",
-                    f"Appointment on {apt.date} at {apt.time_slot} was auto-cancelled as no-show but payment is still on file. Process a refund.",
-                )
-            except Exception:
-                pass
         changed += 1
 
     if changed:

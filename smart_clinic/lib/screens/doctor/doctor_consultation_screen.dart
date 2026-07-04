@@ -740,6 +740,8 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
 
   @override
   Widget build(BuildContext context) {
+    final tabHeight = (MediaQuery.sizeOf(context).height * 0.42).clamp(280.0, 480.0);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditOnly ? AppLocalizations.tr('edit_consultation') : AppLocalizations.tr('consultation')),
@@ -753,7 +755,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -866,7 +868,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
               ),
               const SizedBox(height: 12),
               SizedBox(
-                height: 720,
+                height: tabHeight,
                 child: TabBarView(
                   controller: _tabController,
                   children: [
@@ -924,43 +926,56 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
                 ),
               ),
             ],
-            const SizedBox(height: 12),
-            Row(
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Material(
+          elevation: 8,
+          color: Theme.of(context).colorScheme.surface,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (_hasExtracted && !_isEditOnly)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _isLoading ? null : _rejectNotes,
-                      icon: const Icon(Icons.close),
-                      label: Text(AppLocalizations.tr('reject_clear')),
+                Row(
+                  children: [
+                    if (_hasExtracted && !_isEditOnly)
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isLoading ? null : _rejectNotes,
+                          icon: const Icon(Icons.close),
+                          label: Text(AppLocalizations.tr('reject_clear')),
+                        ),
+                      ),
+                    if (_hasExtracted && !_isEditOnly) const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading ? null : () => setState(() => _soapEditable = true),
+                        icon: const Icon(Icons.edit),
+                        label: Text(AppLocalizations.tr('alter_manually')),
+                      ),
                     ),
-                  ),
-                if (_hasExtracted && !_isEditOnly) const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isLoading ? null : () => setState(() => _soapEditable = true),
-                    icon: const Icon(Icons.edit),
-                    label: Text(AppLocalizations.tr('alter_manually')),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _confirmAndSave,
+                    icon: const Icon(Icons.check_circle),
+                    label: Text(
+                      _isEditOnly
+                          ? AppLocalizations.tr('save_changes')
+                          : (_hasSavedRecord
+                              ? AppLocalizations.tr('save_changes')
+                              : AppLocalizations.tr('confirm_save_history')),
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isLoading ? null : _confirmAndSave,
-                icon: const Icon(Icons.check_circle),
-                label: Text(
-                  _isEditOnly
-                      ? AppLocalizations.tr('save_changes')
-                      : (_hasSavedRecord
-                          ? AppLocalizations.tr('save_changes')
-                          : AppLocalizations.tr('confirm_save_history')),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

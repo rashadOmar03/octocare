@@ -24,6 +24,8 @@ from appointment_rules import (
     validate_patient_booking,
     validate_booking_date,
     ensure_doctor_slot_free,
+    count_paid_no_show_action_required,
+    list_paid_no_show_action_required,
 )
 from routers.appointments import (
     _enrich_appointment,
@@ -255,6 +257,7 @@ def receptionist_dashboard(
     current_user: User = Depends(require_role("receptionist", "admin")),
     db: Session = Depends(get_db),
 ):
+    auto_cancel_expired_appointments(db)
     today = clinic_today()
     today_q = db.query(Appointment).filter(Appointment.date == today)
 
@@ -281,6 +284,8 @@ def receptionist_dashboard(
         .scalar()
     )
 
+    action_required = count_paid_no_show_action_required(db)
+
     return ReceptionistDashboard(
         today_appointments=today_count,
         pending_appointments=pending,
@@ -288,7 +293,18 @@ def receptionist_dashboard(
         completed_appointments=completed,
         arrived_appointments=arrived,
         today_revenue=float(today_revenue),
+        action_required_appointments=action_required,
     )
+
+
+@router.get("/action-required-appointments")
+def action_required_appointments(
+    current_user: User = Depends(require_role("receptionist", "admin")),
+    db: Session = Depends(get_db),
+):
+    auto_cancel_expired_appointments(db)
+    rows = list_paid_no_show_action_required(db)
+    return [_enrich_appointment(a, db) for a in rows]
 
 
 @router.get("/revenue-summary", response_model=ReceptionistRevenueSummary)
