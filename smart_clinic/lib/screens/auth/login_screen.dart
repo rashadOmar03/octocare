@@ -6,6 +6,7 @@ import '../../providers/locale_provider.dart';
 import '../../l10n/localization.dart';
 import '../../config/routes.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../widgets/octocare_logo.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -123,11 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Icon(
-                    Icons.local_hospital,
-                    size: 80,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                  const OctocareLogo(height: 140),
                   const SizedBox(height: 16),
                   Text(
                     AppLocalizations.tr('app_name'),

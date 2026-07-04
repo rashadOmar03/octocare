@@ -1,5 +1,5 @@
 name: smart_clinic
-description: Smart Clinic Management System
+description: Octocare Clinic Management System
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -39,3 +39,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   generate: false
+  assets:
+    - assets/images/

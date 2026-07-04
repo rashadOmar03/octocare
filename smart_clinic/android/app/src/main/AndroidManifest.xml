@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:usesCleartextTraffic="true"
-        android:label="smart_clinic"
+        android:label="Octocare Clinic"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

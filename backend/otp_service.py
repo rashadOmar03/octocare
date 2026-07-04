@@ -25,7 +25,7 @@ def _deliver_otp_email(db: Session, email: str, code: str, purpose: str) -> bool
         return True
     except Exception as exc:
         print(
-            f"[Smart Clinic OTP] Email delivery failed for {email}: {exc}",
+            f"[Octocare Clinic OTP] Email delivery failed for {email}: {exc}",
             flush=True,
         )
         return False
@@ -57,7 +57,7 @@ def create_and_send_otp(
     db.commit()
 
     print(
-        f"\n[Smart Clinic OTP] purpose={purpose} email={normalized} code={code} "
+        f"\n[Octocare Clinic OTP] purpose={purpose} email={normalized} code={code} "
         f"(this is the actual code, also sent by email)\n",
         flush=True,
     )

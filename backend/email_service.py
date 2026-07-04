@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def get_sender_info(db: Session) -> tuple[str, str]:
     settings = db.query(ClinicSettings).first()
-    clinic_name = settings.clinic_name if settings else "Smart Clinic"
+    clinic_name = settings.clinic_name if settings else "Octocare Clinic"
     default_sender = os.getenv("EMAIL_FROM", os.getenv("SMTP_USER", "clinova.clinic@gmail.com")).strip().lower()
     sender = (
         settings.email.strip().lower()
@@ -148,7 +148,7 @@ def _send_via_brevo(from_addr: str, from_name: str, to_email: str, subject: str,
                 f"Details: {detail}"
             )
         raise RuntimeError(f"Brevo API error {response.status_code}: {detail}")
-    print(f"[Smart Clinic Email] Brevo accepted message to {to_email}: {response.text[:200]}", flush=True)
+    print(f"[Octocare Clinic Email] Brevo accepted message to {to_email}: {response.text[:200]}", flush=True)
 
 
 def _send_via_resend(from_addr: str, from_name: str, to_email: str, subject: str, body: str, html_body: str | None) -> None:
@@ -256,12 +256,12 @@ def send_email(db: Session, to_email: str, subject: str, body: str, html_body: s
     try:
         provider = _dispatch_email(sender, clinic_name, to_email, subject, body, html_body)
         logger.info("Email sent to %s via %s", to_email, provider)
-        print(f"[Smart Clinic Email] Sent to {to_email} via {provider}", flush=True)
+        print(f"[Octocare Clinic Email] Sent to {to_email} via {provider}", flush=True)
         return True
     except Exception as exc:
         logger.exception("Failed to send email to %s", to_email)
         print(
-            f"\n[Smart Clinic Email ERROR] {exc}\n"
+            f"\n[Octocare Clinic Email ERROR] {exc}\n"
             f"Provider status: {email_provider_status()}\n"
             f"To: {to_email}\nSubject: {subject}\n{body}\n",
             flush=True,
@@ -277,7 +277,7 @@ def send_email_async(to_email: str, subject: str, body: str, html_body: str | No
         try:
             send_email(db, to_email, subject, body, html_body=html_body)
         except Exception as exc:
-            print(f"[Smart Clinic Email] Background send failed to {to_email}: {exc}", flush=True)
+            print(f"[Octocare Clinic Email] Background send failed to {to_email}: {exc}", flush=True)
         finally:
             db.close()
 
@@ -315,7 +315,7 @@ def send_patient_welcome_email(
         f"Your account at {clinic_name} has been created by our reception desk.\n\n"
         f"Temporary password: {temp_password}\n\n"
         "Steps to access your account:\n"
-        "1. Open the Smart Clinic app and sign in with your email and the temporary password above.\n"
+        "1. Open the Octocare Clinic app and sign in with your email and the temporary password above.\n"
         "2. Enter the 6-digit verification code sent to this email.\n"
         "3. Set a new personal password — only you will know it.\n\n"
         "For your safety, change your password before viewing your medical records.\n"
@@ -327,7 +327,7 @@ def send_patient_welcome_email(
         f"<p>Temporary password: <strong>{temp_password}</strong></p>"
         "<p><strong>Steps to access your account:</strong></p>"
         "<ol>"
-        "<li>Open the Smart Clinic app and sign in with your email and temporary password.</li>"
+        "<li>Open the Octocare Clinic app and sign in with your email and temporary password.</li>"
         "<li>Enter the 6-digit verification code sent to this email.</li>"
         "<li>Set a new personal password — only you will know it.</li>"
         "</ol>"

@@ -1,4 +1,4 @@
-"""Speech-to-text (Whisper) and text-to-speech (Edge TTS) for Smart Clinic.
+"""Speech-to-text (Whisper) and text-to-speech (Edge TTS) for Octocare Clinic.
 
 Supports two Whisper backends:
   1. Groq Whisper API  — preferred on Railway (no GPU needed)

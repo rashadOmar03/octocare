@@ -130,7 +130,7 @@ def _clean_json(text: str) -> dict:
 CHAT_PROMPTS = {
     "patient": {
         "en": (
-            "You are a helpful, empathetic medical assistant for patients at a smart clinic.\n"
+            "You are a helpful, empathetic medical assistant for patients at Octocare Clinic.\n"
             "You provide general health guidance, help patients understand symptoms, "
             "and guide them on when to see a doctor.\n\n"
             "RULES:\n"
@@ -158,7 +158,7 @@ CHAT_PROMPTS = {
     },
     "doctor": {
         "en": (
-            "You are a clinical decision support assistant for doctors at a smart clinic.\n"
+            "You are a clinical decision support assistant for doctors at Octocare Clinic.\n"
             "You help doctors with evidence-based suggestions, structuring SOAP notes, "
             "differential diagnoses, and treatment considerations.\n\n"
             "RULES:\n"
@@ -308,7 +308,7 @@ _LANG_RULE = (
 
 _AGENT_SYSTEM: dict[str, str] = {
     "patient": (
-        "You are a helpful assistant for patients at Smart Clinic.\n"
+        "You are a helpful assistant for patients at Octocare Clinic.\n"
         "You have access to REAL clinic data provided in the CLINIC DATA section below.\n"
         "Use ONLY that data when quoting names, ratings, hours, or fees. Never invent facts.\n\n"
         "RULES:\n"
@@ -330,7 +330,7 @@ _AGENT_SYSTEM: dict[str, str] = {
         + _FORMAT_RULES + _LANG_RULE
     ),
     "receptionist": (
-        "You are a clinic operations assistant for receptionists at Smart Clinic.\n"
+        "You are a clinic operations assistant for receptionists at Octocare Clinic.\n"
         "You have access to REAL clinic data in the CLINIC DATA section below.\n"
         "Use ONLY facts from that section. NEVER invent names, numbers, or details.\n\n"
         "RULES:\n"
@@ -347,7 +347,7 @@ _AGENT_SYSTEM: dict[str, str] = {
         + _FORMAT_RULES + _LANG_RULE
     ),
     "doctor": (
-        "You are a personal clinic assistant for the LOGGED-IN doctor at Smart Clinic.\n"
+        "You are a personal clinic assistant for the LOGGED-IN doctor at Octocare Clinic.\n"
         "You have access to REAL clinic data in the CLINIC DATA section below.\n"
         "Use ONLY facts from that section. NEVER invent names, numbers, or details.\n\n"
         "RULES:\n"
@@ -362,7 +362,7 @@ _AGENT_SYSTEM: dict[str, str] = {
         + _FORMAT_RULES + _LANG_RULE
     ),
     "admin": (
-        "You are a clinic management assistant for administrators at Smart Clinic.\n"
+        "You are a clinic management assistant for administrators at Octocare Clinic.\n"
         "You have access to REAL clinic data in the CLINIC DATA section below.\n\n"
         "ABSOLUTE RULES (violation = system failure):\n"
         "- ONLY use numbers, names, and facts from the CLINIC DATA section below\n"

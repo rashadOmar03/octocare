@@ -33,7 +33,7 @@ from routers.receptionist import router as receptionist_router
 from routers.doctors import router as doctors_router
 from routers.reviews import router as reviews_router
 
-app = FastAPI(title="Smart Clinic Management System", version="1.0.0")
+app = FastAPI(title="Octocare Clinic Management System", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -82,7 +82,7 @@ def _run_db_maintenance():
         run_startup_maintenance(db)
     except Exception as exc:
         db.rollback()
-        print(f"[Smart Clinic] DB maintenance warning: {exc}")
+        print(f"[Octocare Clinic] DB maintenance warning: {exc}")
     finally:
         db.close()
 
@@ -93,7 +93,7 @@ def _repair_appointments():
     try:
         n = repair_wrongly_cancelled_appointments(db)
         if n:
-            print(f"[Smart Clinic] Restored {n} wrongly cancelled appointment(s)")
+            print(f"[Octocare Clinic] Restored {n} wrongly cancelled appointment(s)")
     except Exception:
         db.rollback()
     finally:
@@ -106,12 +106,12 @@ def _log_smtp_status():
     status = email_provider_status()
     if status["configured"]:
         print(
-            f"[Smart Clinic] Email ready via {status['provider']} "
+            f"[Octocare Clinic] Email ready via {status['provider']} "
             f"(from {status['from_email']})"
         )
     else:
-        print("[Smart Clinic] WARNING: Email is NOT configured — OTP emails will NOT be sent.")
-        print("[Smart Clinic] Add BREVO_API_KEY to Railway (recommended) or SMTP settings.")
+        print("[Octocare Clinic] WARNING: Email is NOT configured — OTP emails will NOT be sent.")
+        print("[Octocare Clinic] Add BREVO_API_KEY to Railway (recommended) or SMTP settings.")
 
 
 def _normalize_user_emails():
@@ -337,7 +337,7 @@ def seed_data():
         # --- Clinic Settings ---
         settings = ClinicSettings(
             id=1,
-            clinic_name="Smart Clinic",
+            clinic_name="Octocare Clinic",
             address="123 Healthcare Ave, Riyadh",
             phone="+966-11-1234567",
             email=ADMIN_EMAIL,
@@ -533,7 +533,7 @@ def serve_upload(filename: str):
 
 @app.get("/api")
 def api_root():
-    return {"message": "Smart Clinic API"}
+    return {"message": "Octocare Clinic API"}
 
 
 @app.get("/api/email-status")

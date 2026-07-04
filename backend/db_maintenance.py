@@ -62,7 +62,7 @@ def drop_spo2_column() -> bool:
     cur.execute("ALTER TABLE sensor_data_new RENAME TO sensor_data")
     conn.commit()
     conn.close()
-    print("[Smart Clinic] Removed spo2 column from sensor_data")
+    print("[Octocare Clinic] Removed spo2 column from sensor_data")
     return True
 
 
@@ -125,7 +125,7 @@ def clean_legacy_invalid_data(db: Session) -> dict[str, int]:
     db.commit()
     total = sum(stats.values())
     if total:
-        print(f"[Smart Clinic] Legacy cleanup: {stats}")
+        print(f"[Octocare Clinic] Legacy cleanup: {stats}")
     return stats
 
 
@@ -136,18 +136,18 @@ def run_startup_maintenance(db: Session) -> None:
 
     try:
         if ensure_clinic_working_days(db):
-            print("[Smart Clinic] Clinic working days updated to Sat–Thu")
+            print("[Octocare Clinic] Clinic working days updated to Sat–Thu")
     except Exception as exc:
         db.rollback()
-        print(f"[Smart Clinic] Working days sync warning: {exc}")
+        print(f"[Octocare Clinic] Working days sync warning: {exc}")
 
     try:
         changed = ensure_doctor_schedules(db)
         if changed:
-            print(f"[Smart Clinic] Doctor schedules synced ({changed} rows)")
+            print(f"[Octocare Clinic] Doctor schedules synced ({changed} rows)")
     except Exception as exc:
         db.rollback()
-        print(f"[Smart Clinic] Schedule sync warning: {exc}")
+        print(f"[Octocare Clinic] Schedule sync warning: {exc}")
     from routers.records import sync_prescriptions_from_records
     from routers.prescriptions import expire_prescriptions
 
@@ -156,4 +156,4 @@ def run_startup_maintenance(db: Session) -> None:
         expire_prescriptions(db)
     except Exception as exc:
         db.rollback()
-        print(f"[Smart Clinic] Prescription sync warning: {exc}")
+        print(f"[Octocare Clinic] Prescription sync warning: {exc}")

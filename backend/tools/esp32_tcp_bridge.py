@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bridge ESP32 TCP sensor stream into the Smart Clinic backend for web clients."""
+"""Bridge ESP32 TCP sensor stream into the Octocare Clinic backend for web clients."""
 
 from __future__ import annotations
 

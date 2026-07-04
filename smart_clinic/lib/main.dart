@@ -95,15 +95,15 @@ void main() async {
         ChangeNotifierProvider.value(value: themeProvider),
         ChangeNotifierProvider.value(value: localeProvider),
       ],
-      child: SmartClinicApp(initialRoute: initialRoute),
+      child: OctocareClinicApp(initialRoute: initialRoute),
     ),
   );
 }
 
-class SmartClinicApp extends StatelessWidget {
+class OctocareClinicApp extends StatelessWidget {
   final String initialRoute;
 
-  const SmartClinicApp({super.key, required this.initialRoute});
+  const OctocareClinicApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +113,7 @@ class SmartClinicApp extends StatelessWidget {
     return Directionality(
       textDirection: localeProvider.isArabic ? TextDirection.rtl : TextDirection.ltr,
       child: MaterialApp(
-        title: 'Smart Clinic',
+        title: 'Octocare Clinic',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,

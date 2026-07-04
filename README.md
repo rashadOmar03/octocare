@@ -1,12 +1,12 @@
-# Smart Clinic Management System
-# نظام إدارة العيادة الذكية
+# Octocare Clinic Management System
+# نظام إدارة عيادة أوكتُوكير
 
 ---
 
 ## English
 
 ### Overview
-Smart Clinic is a comprehensive healthcare management platform for a single private clinic. It includes clinic management, appointment scheduling, medical records, prescriptions, AI-assisted documentation, IoT vital monitoring, and reporting.
+Octocare Clinic is a comprehensive healthcare management platform for a single private clinic. It includes clinic management, appointment scheduling, medical records, prescriptions, AI-assisted documentation, IoT vital monitoring, and reporting.
 
 ### System Users
 1. **Patient** - Book appointments, view records, use AI assistant, monitor vitals
@@ -109,7 +109,7 @@ Connect ESP32 sensor via Bluetooth to the mobile app. The app reads heart rate, 
 ## العربية
 
 ### نظرة عامة
-نظام العيادة الذكية هو منصة شاملة لإدارة الرعاية الصحية لعيادة خاصة واحدة. يشمل إدارة العيادة، جدولة المواعيد، السجلات الطبية، الوصفات الطبية، التوثيق بمساعدة الذكاء الاصطناعي، مراقبة العلامات الحيوية عبر إنترنت الأشياء، وإعداد التقارير.
+نظام عيادة أوكتُوكير هو منصة شاملة لإدارة الرعاية الصحية لعيادة خاصة واحدة. يشمل إدارة العيادة، جدولة المواعيد، السجلات الطبية، الوصفات الطبية، التوثيق بمساعدة الذكاء الاصطناعي، مراقبة العلامات الحيوية عبر إنترنت الأشياء، وإعداد التقارير.
 
 ### مستخدمو النظام
 1. **المريض** - حجز المواعيد، عرض السجلات، استخدام المساعد الذكي، مراقبة العلامات الحيوية

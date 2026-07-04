@@ -14,7 +14,7 @@ class SensorLineParser {
     }
 
     final upperTrimmed = trimmed.toUpperCase();
-    if (upperTrimmed.startsWith('SYSTEM') || upperTrimmed.startsWith('SMART CLINIC')) {
+    if (upperTrimmed.startsWith('SYSTEM') || upperTrimmed.startsWith('SMART CLINIC') || upperTrimmed.startsWith('OCTOCARE')) {
       return null;
     }
 

@@ -164,7 +164,7 @@ def tool_clinic_settings(db: Session) -> dict:
     s = db.query(ClinicSettings).first()
     if not s:
         return {
-            "clinic_name": "Smart Clinic",
+            "clinic_name": "Octocare Clinic",
             "address": None,
             "phone": None,
             "email": None,

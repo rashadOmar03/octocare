@@ -1,4 +1,4 @@
-# smart_clinic
+# Octocare Clinic (Flutter app)
 
 A new Flutter project.
 

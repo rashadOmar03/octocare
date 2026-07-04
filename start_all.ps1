@@ -1,4 +1,4 @@
-# Smart Clinic - start backend + cloudflare + ESP32 bridge
+# Octocare Clinic - start backend + cloudflare + ESP32 bridge
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path

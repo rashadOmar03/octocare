@@ -193,7 +193,7 @@ def _require_roles(user: User, *roles: str) -> None:
 
 def _get_clinic_name(db: Session) -> str:
     settings = db.query(ClinicSettings).first()
-    return settings.clinic_name if settings else "Smart Clinic"
+    return settings.clinic_name if settings else "Octocare Clinic"
 
 
 def _doctor_display_name(db: Session, doctor_id: str) -> str:

@@ -1,4 +1,4 @@
--- Smart Clinic Management System - Database Schema
+-- Octocare Clinic Management System - Database Schema
 -- SQLite Compatible
 
 -- Enable foreign keys
@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS ai_suggestions (
 
 CREATE TABLE IF NOT EXISTS clinic_settings (
     id INTEGER PRIMARY KEY DEFAULT 1,
-    clinic_name TEXT NOT NULL DEFAULT 'Smart Clinic',
+    clinic_name TEXT NOT NULL DEFAULT 'Octocare Clinic',
     address TEXT,
     phone TEXT,
     email TEXT,
@@ -223,4 +223,4 @@ INSERT OR IGNORE INTO specialties (name, description) VALUES
     ('ENT', 'Ear, Nose, and Throat');
 
 -- Seed clinic settings
-INSERT OR IGNORE INTO clinic_settings (id, clinic_name) VALUES (1, 'Smart Clinic');
+INSERT OR IGNORE INTO clinic_settings (id, clinic_name) VALUES (1, 'Octocare Clinic');

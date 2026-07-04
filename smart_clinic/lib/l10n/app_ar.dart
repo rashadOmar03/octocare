@@ -1,6 +1,6 @@
 class AppStringsAr {
   static const Map<String, String> strings = {
-    'app_name': 'العيادة الذكية',
+    'app_name': 'عيادة أوكتُوكير',
     'login': 'تسجيل الدخول',
     'register': 'إنشاء حساب',
     'email': 'البريد الإلكتروني',

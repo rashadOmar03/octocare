@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  static const Color primaryColor = Color(0xFF1565C0);
-  static const Color accentColor = Color(0xFF00897B);
+  static const Color primaryColor = Color(0xFF00A8B5);
+  static const Color accentColor = Color(0xFF00838F);
   static const Color errorColor = Color(0xFFD32F2F);
   static const Color successColor = Color(0xFF388E3C);
   static const Color warningColor = Color(0xFFF57C00);
@@ -99,7 +99,7 @@ class AppTheme {
         elevation: 4,
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: const Color(0xFFE3F2FD),
+        backgroundColor: const Color(0xFFE0F7FA),
         selectedColor: primaryColor,
         labelStyle: const TextStyle(color: Color(0xFF212121)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -132,10 +132,10 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      primaryColor: const Color(0xFF42A5F5),
+      primaryColor: const Color(0xFF4DD0E1),
       colorScheme: const ColorScheme.dark(
-        primary: Color(0xFF42A5F5),
-        secondary: Color(0xFF4DB6AC),
+        primary: Color(0xFF4DD0E1),
+        secondary: Color(0xFF26C6DA),
         error: Color(0xFFEF5350),
         surface: Color(0xFF1E1E1E),
         onPrimary: Colors.black,
@@ -160,7 +160,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF42A5F5),
+          backgroundColor: const Color(0xFF4DD0E1),
           foregroundColor: Colors.black,
           elevation: 2,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -170,8 +170,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF42A5F5),
-          side: const BorderSide(color: Color(0xFF42A5F5)),
+          foregroundColor: const Color(0xFF4DD0E1),
+          side: const BorderSide(color: Color(0xFF4DD0E1)),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -179,7 +179,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF42A5F5),
+          foregroundColor: const Color(0xFF4DD0E1),
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
@@ -197,7 +197,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF42A5F5), width: 2),
+          borderSide: const BorderSide(color: Color(0xFF4DD0E1), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -208,19 +208,19 @@ class AppTheme {
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: Color(0xFF1E1E1E),
-        selectedItemColor: Color(0xFF42A5F5),
+        selectedItemColor: const Color(0xFF4DD0E1),
         unselectedItemColor: Color(0xFF757575),
         type: BottomNavigationBarType.fixed,
         elevation: 8,
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: Color(0xFF42A5F5),
+        backgroundColor: const Color(0xFF4DD0E1),
         foregroundColor: Colors.black,
         elevation: 4,
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: const Color(0xFF1E3A5F),
-        selectedColor: const Color(0xFF42A5F5),
+        backgroundColor: const Color(0xFF1A3A40),
+        selectedColor: const Color(0xFF4DD0E1),
         labelStyle: const TextStyle(color: Color(0xFFE0E0E0)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -231,9 +231,9 @@ class AppTheme {
         space: 1,
       ),
       tabBarTheme: const TabBarThemeData(
-        labelColor: Color(0xFF42A5F5),
-        unselectedLabelColor: Color(0xFF9E9E9E),
-        indicatorColor: Color(0xFF42A5F5),
+        labelColor: const Color(0xFF4DD0E1),
+        unselectedLabelColor: const Color(0xFF9E9E9E),
+        indicatorColor: Color(0xFF4DD0E1),
       ),
       textTheme: textTheme.copyWith(
         headlineLarge: textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold, color: const Color(0xFFE0E0E0)),

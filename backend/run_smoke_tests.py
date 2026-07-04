@@ -1,4 +1,4 @@
-"""Smoke tests for Smart Clinic API - run before starting servers."""
+"""Smoke tests for Octocare Clinic API - run before starting servers."""
 import sys
 import uuid
 from fastapi.testclient import TestClient
@@ -35,7 +35,7 @@ def auth_headers(token: str):
     return {"Authorization": f"Bearer {token}"}
 
 
-print("\n=== Smart Clinic Smoke Tests ===\n")
+print("\n=== Octocare Clinic Smoke Tests ===\n")
 
 # 1. Health / root
 r = client.get("/docs")

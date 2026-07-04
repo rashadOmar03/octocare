@@ -159,7 +159,7 @@ def _make_review(db, appointment_id: str, patient_id: str, doctor_id: str, ratin
 class TestClinicSettings:
     def test_returns_defaults_when_empty(self, db):
         result = tool_clinic_settings(db)
-        assert result["clinic_name"] == "Smart Clinic"
+        assert result["clinic_name"] == "Octocare Clinic"
         assert result["default_fee"] == 100.0
         assert "working_hours_start" in result
 

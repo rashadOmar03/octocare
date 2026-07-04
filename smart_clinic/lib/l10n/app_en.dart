@@ -1,6 +1,6 @@
 class AppStringsEn {
   static const Map<String, String> strings = {
-    'app_name': 'Smart Clinic',
+    'app_name': 'Octocare Clinic',
     'login': 'Login',
     'register': 'Register',
     'email': 'Email',

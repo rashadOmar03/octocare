@@ -1,4 +1,4 @@
-"""Workflow and maintenance tests for Smart Clinic backend."""
+"""Workflow and maintenance tests for Octocare Clinic backend."""
 import os
 import sqlite3
 import sys
