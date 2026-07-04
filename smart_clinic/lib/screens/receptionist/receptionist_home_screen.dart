@@ -126,21 +126,33 @@ class _ReceptionistHomeScreenState extends State<ReceptionistHomeScreen> {
                         value: '${dash?.todayAppointments ?? 0}',
                         icon: Icons.calendar_today,
                         color: const Color(0xFF1565C0),
-                        onTap: () => Navigator.pushNamed(context, AppRoutes.receptionistAppointments),
+                        onTap: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.receptionistAppointments,
+                          arguments: {'initial_tab': 1, 'date_scope': 'today'},
+                        ),
                       ),
                       StatCard(
                         title: AppLocalizations.tr('arrived'),
                         value: '${dash?.arrived ?? 0}',
                         icon: Icons.person_pin,
                         color: const Color(0xFF7B1FA2),
-                        onTap: () => Navigator.pushNamed(context, AppRoutes.receptionistQueue),
+                        onTap: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.receptionistAppointments,
+                          arguments: {'initial_tab': 2, 'date_scope': 'today'},
+                        ),
                       ),
                       StatCard(
                         title: AppLocalizations.tr('confirmed'),
                         value: '${dash?.confirmed ?? 0}',
                         icon: Icons.check_circle,
                         color: const Color(0xFF388E3C),
-                        onTap: () => Navigator.pushNamed(context, AppRoutes.receptionistAppointments),
+                        onTap: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.receptionistAppointments,
+                          arguments: {'initial_tab': 1},
+                        ),
                       ),
                       StatCard(
                         title: AppLocalizations.tr('pending'),

@@ -22,7 +22,7 @@ from appointment_rules import (
     require_paid_arrived_appointment,
 )
 from audit_service import log_audit
-from clinic_time import clinic_today
+from clinic_time import clinic_today, upcoming_from_date
 from clinic_schedule import is_clinic_open, parse_working_days, working_days_label
 from access_control import (
     assert_appointment_read,
@@ -456,13 +456,16 @@ def list_appointments(
     else:
         if date_from:
             query = query.filter(Appointment.date >= date_from)
-        elif current_user.role in ("receptionist", "admin") and status_filter == "pending":
-            # Pending patient bookings are usually tomorrow or later.
-            query = query.filter(Appointment.date >= clinic_today())
+        elif current_user.role in ("receptionist", "admin"):
+            # Staff worklists default to today + future unless a specific day is requested.
+            query = query.filter(Appointment.date >= upcoming_from_date())
         if date_to:
             query = query.filter(Appointment.date <= date_to)
 
-    appointments = query.order_by(Appointment.date.desc(), Appointment.time_slot.desc()).all()
+    if current_user.role in ("receptionist", "admin") and not single_date:
+        appointments = query.order_by(Appointment.date.asc(), Appointment.time_slot.asc()).all()
+    else:
+        appointments = query.order_by(Appointment.date.desc(), Appointment.time_slot.desc()).all()
     return [_enrich_appointment(apt, db) for apt in appointments]
 
 

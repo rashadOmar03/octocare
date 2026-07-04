@@ -190,7 +190,11 @@ class SmartClinicApp extends StatelessWidget {
           AppRoutes.receptionistAppointments: (context) {
             final args = ModalRoute.of(context)?.settings.arguments;
             final tab = args is Map ? (args['initial_tab'] as int? ?? 0) : 0;
-            return RoleGuard(requiredRole: 'receptionist', child: ReceptionistAppointmentsScreen(initialTabIndex: tab));
+            final scope = args is Map ? args['date_scope']?.toString() : null;
+            return RoleGuard(
+              requiredRole: 'receptionist',
+              child: ReceptionistAppointmentsScreen(initialTabIndex: tab, initialDateScope: scope),
+            );
           },
           AppRoutes.receptionistQueue: (_) => const RoleGuard(requiredRole: 'receptionist', child: ReceptionistQueueScreen()),
           AppRoutes.receptionistPayments: (_) => const RoleGuard(requiredRole: 'receptionist', child: ReceptionistPaymentsScreen()),

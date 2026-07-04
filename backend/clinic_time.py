@@ -23,3 +23,8 @@ def clinic_today() -> date:
 
 def clinic_now() -> datetime:
     return datetime.now(clinic_timezone())
+
+
+def upcoming_from_date() -> date:
+    """First calendar day included in receptionist upcoming lists."""
+    return clinic_today()

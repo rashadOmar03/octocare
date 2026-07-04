@@ -10,10 +10,17 @@ import '../../widgets/receptionist_scaffold.dart';
 import '../../widgets/receptionist_reschedule_dialog.dart';
 import '../../utils/ui_helpers.dart';
 
+enum _DateScope { upcoming, today, all }
+
 class ReceptionistAppointmentsScreen extends StatefulWidget {
   final int initialTabIndex;
+  final String? initialDateScope;
 
-  const ReceptionistAppointmentsScreen({super.key, this.initialTabIndex = 0});
+  const ReceptionistAppointmentsScreen({
+    super.key,
+    this.initialTabIndex = 0,
+    this.initialDateScope,
+  });
 
   @override
   State<ReceptionistAppointmentsScreen> createState() => _ReceptionistAppointmentsScreenState();
@@ -24,14 +31,26 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
   final AppointmentService _service = AppointmentService();
   List<Appointment> _allAppointments = [];
   bool _isLoading = true;
-  bool _showAllHistory = false;
+  _DateScope _dateScope = _DateScope.upcoming;
   String? _loadError;
   final _searchController = TextEditingController();
+
+  _DateScope _parseDateScope(String? raw) {
+    switch (raw) {
+      case 'today':
+        return _DateScope.today;
+      case 'all':
+        return _DateScope.all;
+      default:
+        return _DateScope.upcoming;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this, initialIndex: widget.initialTabIndex.clamp(0, 4));
+    _dateScope = _parseDateScope(widget.initialDateScope);
     _loadData();
   }
 
@@ -53,10 +72,13 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
       _loadError = null;
     });
     try {
-      if (_showAllHistory) {
-        _allAppointments = await _service.getAppointments();
-      } else {
-        _allAppointments = await _service.getAppointments(dateFrom: _todayStr);
+      switch (_dateScope) {
+        case _DateScope.today:
+          _allAppointments = await _service.getAppointments(date: _todayStr);
+        case _DateScope.all:
+          _allAppointments = await _service.getAppointments(dateFrom: '2000-01-01');
+        case _DateScope.upcoming:
+          _allAppointments = await _service.getAppointments();
       }
     } catch (e) {
       _loadError = extractApiError(e);
@@ -86,6 +108,23 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
       return (a.timeSlot ?? '').compareTo(b.timeSlot ?? '');
     });
     return items;
+  }
+
+  String _emptyMessageFor(String status) {
+    switch (status) {
+      case 'pending':
+        return AppLocalizations.tr('no_pending_appointments');
+      case 'confirmed':
+        return AppLocalizations.tr('no_confirmed_appointments');
+      case 'arrived':
+        return AppLocalizations.tr('no_arrived_appointments');
+      case 'completed':
+        return AppLocalizations.tr('no_completed_appointments');
+      case 'cancelled':
+        return AppLocalizations.tr('no_cancelled_appointments');
+      default:
+        return AppLocalizations.tr('no_data');
+    }
   }
 
   Future<void> _reschedule(Appointment appointment, {bool reactivate = false}) async {
@@ -154,40 +193,61 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
                   ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: AppLocalizations.tr('search_patient_hint'),
-                            prefixIcon: const Icon(Icons.search),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onChanged: (_) => setState(() {}),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        FilterChip(
+                          label: Text(AppLocalizations.tr('upcoming')),
+                          selected: _dateScope == _DateScope.upcoming,
+                          onSelected: (_) {
+                            setState(() => _dateScope = _DateScope.upcoming);
+                            _loadData();
+                          },
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      FilterChip(
-                        label: Text(_showAllHistory ? AppLocalizations.tr('all_dates') : AppLocalizations.tr('upcoming')),
-                        selected: !_showAllHistory,
-                        onSelected: (upcoming) {
-                          setState(() => _showAllHistory = !upcoming);
-                          _loadData();
-                        },
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        FilterChip(
+                          label: Text(AppLocalizations.tr('today_only')),
+                          selected: _dateScope == _DateScope.today,
+                          onSelected: (_) {
+                            setState(() => _dateScope = _DateScope.today);
+                            _loadData();
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        FilterChip(
+                          label: Text(AppLocalizations.tr('all_dates')),
+                          selected: _dateScope == _DateScope.all,
+                          onSelected: (_) {
+                            setState(() => _dateScope = _DateScope.all);
+                            _loadData();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: AppLocalizations.tr('search_patient_hint'),
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      _buildList(_filterByStatus('pending'), emptyMessage: AppLocalizations.tr('no_pending_appointments'), showConfirm: true, showCancel: true, showReschedule: true),
-                      _buildList(_filterByStatus('confirmed'), showMarkArrived: true, showCancel: true, showReschedule: true),
-                      _buildList(_filterByStatus('arrived'), showReschedule: true, showLeaveQueue: true),
-                      _buildList(_filterByStatus('completed')),
-                      _buildList(_filterByStatus('cancelled'), showReschedule: true, reactivateCancelled: true),
+                      _buildList(_filterByStatus('pending'), emptyMessage: _emptyMessageFor('pending'), showConfirm: true, showCancel: true, showReschedule: true),
+                      _buildList(_filterByStatus('confirmed'), emptyMessage: _emptyMessageFor('confirmed'), showMarkArrived: true, markArrivedTodayOnly: true, showCancel: true, showReschedule: true),
+                      _buildList(_filterByStatus('arrived'), emptyMessage: _emptyMessageFor('arrived'), showReschedule: true, showLeaveQueue: true),
+                      _buildList(_filterByStatus('completed'), emptyMessage: _emptyMessageFor('completed')),
+                      _buildList(_filterByStatus('cancelled'), emptyMessage: _emptyMessageFor('cancelled'), showReschedule: true, reactivateCancelled: true),
                     ],
                   ),
                 ),

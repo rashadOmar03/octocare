@@ -4,12 +4,13 @@ import '../models/appointment.dart';
 class AppointmentService {
   final ApiService _api = ApiService.instance;
 
-  Future<List<Appointment>> getAppointments({String? status, String? date, String? dateFrom}) async {
+  Future<List<Appointment>> getAppointments({String? status, String? date, String? dateFrom, String? dateTo}) async {
     String endpoint = '/appointments/';
     final params = <String>[];
     if (status != null) params.add('status=$status');
     if (date != null) params.add('date=$date');
     if (dateFrom != null) params.add('date_from=$dateFrom');
+    if (dateTo != null) params.add('date_to=$dateTo');
     if (params.isNotEmpty) endpoint += '?${params.join('&')}';
 
     final response = await _api.get(endpoint);

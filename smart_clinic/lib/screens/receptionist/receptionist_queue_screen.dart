@@ -56,8 +56,7 @@ class _ReceptionistQueueScreenState extends State<ReceptionistQueueScreen> {
     final searchController = TextEditingController();
     List<Appointment> confirmed = [];
     try {
-      final allConfirmed = await _service.getAppointments(status: 'confirmed');
-      confirmed = allConfirmed.where((a) => a.date == _todayStr).toList();
+      confirmed = await _service.getAppointments(status: 'confirmed', date: _todayStr);
     } catch (e) {
       if (mounted) showErrorSnackBar(context, e);
       return;

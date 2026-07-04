@@ -1,4 +1,5 @@
 import 'api_service.dart';
+import 'appointment_service.dart';
 import '../models/appointment.dart';
 
 class ReceptionistDashboardData {
@@ -118,6 +119,24 @@ class ReceptionistService {
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     });
     return Appointment.fromJson(Map<String, dynamic>.from(response));
+  }
+
+  Future<List<Appointment>> getAppointments({
+    String? status,
+    String? date,
+    bool allHistory = false,
+  }) async {
+    if (allHistory) {
+      return AppointmentService().getAppointments(status: status);
+    }
+    if (date != null) {
+      final response = await _api.get('/receptionist/appointments?date=$date${status != null ? '&status=$status' : ''}');
+      final list = response is List ? response : (response['results'] ?? []);
+      return List<Appointment>.from(
+        (list as List).map((e) => Appointment.fromJson(Map<String, dynamic>.from(e as Map))),
+      );
+    }
+    return AppointmentService().getAppointments(status: status);
   }
 
   Future<List<Appointment>> getQueue({String? doctorId, String? date}) async {

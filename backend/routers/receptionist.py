@@ -37,7 +37,7 @@ from audit_service import log_audit
 from otp_service import create_and_send_otp
 from email_service import send_patient_welcome_email
 from profile_utils import profile_personal_info_complete
-from clinic_time import clinic_today
+from clinic_time import clinic_today, upcoming_from_date
 from clinic_schedule import is_clinic_open
 
 router = APIRouter()
@@ -265,7 +265,11 @@ def receptionist_dashboard(
         .filter(Appointment.status == "pending", Appointment.date >= today)
         .count()
     )
-    confirmed = today_q.filter(Appointment.status == "confirmed").count()
+    confirmed = (
+        db.query(Appointment)
+        .filter(Appointment.status == "confirmed", Appointment.date >= today)
+        .count()
+    )
     completed = today_q.filter(Appointment.status == "completed").count()
     arrived = today_q.filter(Appointment.status == "arrived").count()
 
@@ -373,19 +377,16 @@ def list_receptionist_appointments(
     current_user: User = Depends(require_role("receptionist", "admin")),
     db: Session = Depends(get_db),
 ):
-    """List appointments visible to receptionist (today by default)."""
+    """List appointments visible to receptionist (upcoming by default)."""
     auto_cancel_expired_appointments(db)
     query = db.query(Appointment)
     if date_filter:
         query = query.filter(Appointment.date == date_filter)
-    elif status_filter == "pending":
-        # Patient bookings are at least one day ahead — show upcoming pending, not today-only.
-        query = query.filter(Appointment.date >= clinic_today())
     else:
-        query = query.filter(Appointment.date == clinic_today())
+        query = query.filter(Appointment.date >= upcoming_from_date())
     if status_filter:
         query = query.filter(Appointment.status == status_filter)
-    appointments = query.order_by(Appointment.time_slot.asc()).all()
+    appointments = query.order_by(Appointment.date.asc(), Appointment.time_slot.asc()).all()
     return [_enrich_appointment(apt, db) for apt in appointments]
 
 
