@@ -132,7 +132,14 @@ def clean_legacy_invalid_data(db: Session) -> dict[str, int]:
 def run_startup_maintenance(db: Session) -> None:
     drop_spo2_column()
     clean_legacy_invalid_data(db)
-    from clinic_schedule import ensure_doctor_schedules
+    from clinic_schedule import ensure_clinic_working_days, ensure_doctor_schedules
+
+    try:
+        if ensure_clinic_working_days(db):
+            print("[Smart Clinic] Clinic working days updated to Sat–Thu")
+    except Exception as exc:
+        db.rollback()
+        print(f"[Smart Clinic] Working days sync warning: {exc}")
 
     try:
         changed = ensure_doctor_schedules(db)

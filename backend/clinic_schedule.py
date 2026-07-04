@@ -56,6 +56,39 @@ def is_clinic_open(slot_date: date, settings: ClinicSettings | None) -> bool:
     return slot_date.weekday() in parse_working_days(raw)
 
 
+# Legacy installs used Mon–Fri only (0–4) or text labels without Saturday.
+_LEGACY_MON_FRI = frozenset({0, 1, 2, 3, 4})
+_LEGACY_TEXT_WORKING_DAYS = frozenset({
+    "Sun,Mon,Tue,Wed,Thu",
+    "Mon,Tue,Wed,Thu,Fri",
+    "0,1,2,3,4",
+})
+
+
+def ensure_clinic_working_days(db: Session) -> bool:
+    """Upgrade clinic settings to Sat–Thu if still on legacy Mon–Fri schedule."""
+    settings = db.query(ClinicSettings).first()
+    if not settings:
+        return False
+
+    raw = (settings.working_days or "").strip()
+    current = parse_working_days(raw)
+    target = ",".join(str(d) for d in sorted(DEFAULT_WORKING_DAYS))
+
+    if raw in _LEGACY_TEXT_WORKING_DAYS or current == _LEGACY_MON_FRI:
+        settings.working_days = target
+        db.commit()
+        return True
+
+    # Middle East clinic default: Saturday must be bookable.
+    if 5 not in current:
+        settings.working_days = target
+        db.commit()
+        return True
+
+    return False
+
+
 def ensure_doctor_schedules(db: Session, doctor_ids: list[str] | None = None) -> int:
     """Ensure each doctor has schedule rows for current clinic working days."""
     settings = db.query(ClinicSettings).first()

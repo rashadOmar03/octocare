@@ -176,7 +176,9 @@ def create_doctor(
     )
     db.add(doctor)
 
-    for day in range(5):
+    from clinic_schedule import DEFAULT_WORKING_DAYS
+
+    for day in DEFAULT_WORKING_DAYS:
         db.add(DoctorSchedule(
             doctor_id=doctor_id, day_of_week=day,
             start_time="09:00", end_time="17:00", is_available=True,
