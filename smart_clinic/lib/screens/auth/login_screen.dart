@@ -124,13 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const OctocareLogo(height: 140),
-                  const SizedBox(height: 16),
-                  Text(
-                    AppLocalizations.tr('app_name'),
-                    style: Theme.of(context).textTheme.headlineMedium,
-                    textAlign: TextAlign.center,
-                  ),
+                  const OctocareBrandHeader(logoHeight: 130),
                   const SizedBox(height: 8),
                   Text(
                     AppLocalizations.tr('sign_in_continue'),

@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'config/app_theme.dart';
 import 'config/routes.dart';
+import 'l10n/localization.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
@@ -113,7 +114,7 @@ class OctocareClinicApp extends StatelessWidget {
     return Directionality(
       textDirection: localeProvider.isArabic ? TextDirection.rtl : TextDirection.ltr,
       child: MaterialApp(
-        title: 'Octocare Clinic',
+        onGenerateTitle: (context) => AppLocalizations.tr('app_name'),
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,

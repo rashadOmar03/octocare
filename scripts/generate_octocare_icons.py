@@ -45,6 +45,14 @@ WEB_ICONS = {
     "icons/Icon-maskable-512.png": 512,
 }
 
+ANDROID_SPLASH = FLUTTER / "android" / "app" / "src" / "main" / "res" / "drawable" / "splash_logo.png"
+IOS_SPLASH_DIR = FLUTTER / "ios" / "Runner" / "Assets.xcassets" / "LaunchImage.imageset"
+IOS_SPLASH_SIZES = {
+    "LaunchImage.png": 168,
+    "LaunchImage@2x.png": 336,
+    "LaunchImage@3x.png": 504,
+}
+
 
 def save_square(image: Image.Image, size: int, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,6 +100,27 @@ def main() -> None:
     logo = Image.open(LOGO_MASTER).convert("RGBA")
     logo.save(app_assets / "octocare_logo.png", format="PNG", optimize=True)
     print(f"Wrote {app_assets / 'octocare_logo.png'}")
+
+    splash_source = logo.copy()
+    for filename, size in IOS_SPLASH_SIZES.items():
+        canvas = Image.new("RGBA", (size, size), (255, 255, 255, 255))
+        inner = int(size * 0.72)
+        item = splash_source.copy()
+        item.thumbnail((inner, inner), Image.Resampling.LANCZOS)
+        offset = ((size - item.width) // 2, (size - item.height) // 2)
+        canvas.paste(item, offset, item)
+        target = IOS_SPLASH_DIR / filename
+        canvas.save(target, format="PNG", optimize=True)
+        print(f"Wrote {target}")
+
+    splash_android = Image.new("RGBA", (512, 512), (255, 255, 255, 255))
+    item = splash_source.copy()
+    item.thumbnail((360, 360), Image.Resampling.LANCZOS)
+    offset = ((512 - item.width) // 2, (512 - item.height) // 2)
+    splash_android.paste(item, offset, item)
+    ANDROID_SPLASH.parent.mkdir(parents=True, exist_ok=True)
+    splash_android.save(ANDROID_SPLASH, format="PNG", optimize=True)
+    print(f"Wrote {ANDROID_SPLASH}")
 
 
 if __name__ == "__main__":
