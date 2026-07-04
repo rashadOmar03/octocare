@@ -160,6 +160,7 @@ class AppStringsEn {
     'waiting_queue': 'Waiting Queue',
     'view_all': 'View All',
     'no_upcoming_appointments': 'No upcoming appointments',
+    'no_pending_appointments': 'No pending bookings to confirm',
     'no_records': 'No medical records found',
     'no_notifications': 'No notifications',
     'profile_incomplete': 'Please complete your profile first',

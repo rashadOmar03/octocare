@@ -160,6 +160,7 @@ class AppStringsAr {
     'waiting_queue': 'قائمة الانتظار',
     'view_all': 'عرض الكل',
     'no_upcoming_appointments': 'لا توجد مواعيد قادمة',
+    'no_pending_appointments': 'لا توجد حجوزات معلقة للتأكيد',
     'no_records': 'لا توجد سجلات طبية',
     'no_notifications': 'لا توجد إشعارات',
     'profile_incomplete': 'يرجى إكمال ملفك الشخصي أولاً',

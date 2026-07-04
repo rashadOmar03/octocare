@@ -11,7 +11,9 @@ import '../../widgets/receptionist_reschedule_dialog.dart';
 import '../../utils/ui_helpers.dart';
 
 class ReceptionistAppointmentsScreen extends StatefulWidget {
-  const ReceptionistAppointmentsScreen({super.key});
+  final int initialTabIndex;
+
+  const ReceptionistAppointmentsScreen({super.key, this.initialTabIndex = 0});
 
   @override
   State<ReceptionistAppointmentsScreen> createState() => _ReceptionistAppointmentsScreenState();
@@ -22,14 +24,14 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
   final AppointmentService _service = AppointmentService();
   List<Appointment> _allAppointments = [];
   bool _isLoading = true;
-  bool _todayOnly = false;
+  bool _showAllHistory = false;
   String? _loadError;
   final _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 5, vsync: this, initialIndex: widget.initialTabIndex.clamp(0, 4));
     _loadData();
   }
 
@@ -51,7 +53,11 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
       _loadError = null;
     });
     try {
-      _allAppointments = await _service.getAppointments(date: _todayOnly ? _todayStr : null);
+      if (_showAllHistory) {
+        _allAppointments = await _service.getAppointments();
+      } else {
+        _allAppointments = await _service.getAppointments(dateFrom: _todayStr);
+      }
     } catch (e) {
       _loadError = extractApiError(e);
     }
@@ -163,10 +169,10 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
                       ),
                       const SizedBox(width: 8),
                       FilterChip(
-                        label: Text(_todayOnly ? AppLocalizations.tr('today_only') : AppLocalizations.tr('all_dates')),
-                        selected: _todayOnly,
-                        onSelected: (v) {
-                          setState(() => _todayOnly = v);
+                        label: Text(_showAllHistory ? AppLocalizations.tr('all_dates') : AppLocalizations.tr('upcoming')),
+                        selected: !_showAllHistory,
+                        onSelected: (upcoming) {
+                          setState(() => _showAllHistory = !upcoming);
                           _loadData();
                         },
                       ),
@@ -177,7 +183,7 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      _buildList(_filterByStatus('pending'), showConfirm: true, showCancel: true, showReschedule: true),
+                      _buildList(_filterByStatus('pending'), emptyMessage: AppLocalizations.tr('no_pending_appointments'), showConfirm: true, showCancel: true, showReschedule: true),
                       _buildList(_filterByStatus('confirmed'), showMarkArrived: true, showCancel: true, showReschedule: true),
                       _buildList(_filterByStatus('arrived'), showReschedule: true, showLeaveQueue: true),
                       _buildList(_filterByStatus('completed')),
@@ -192,6 +198,7 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
 
   Widget _buildList(
     List<Appointment> items, {
+    String? emptyMessage,
     bool showConfirm = false,
     bool showCancel = false,
     bool showMarkArrived = false,
@@ -200,7 +207,12 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
     bool markArrivedTodayOnly = false,
     bool reactivateCancelled = false,
   }) {
-    if (items.isEmpty) return EmptyState(icon: Icons.calendar_today, message: AppLocalizations.tr('no_data'));
+    if (items.isEmpty) {
+      return EmptyState(
+        icon: Icons.calendar_today,
+        message: emptyMessage ?? AppLocalizations.tr('no_data'),
+      );
+    }
     return RefreshIndicator(
       onRefresh: _loadData,
       child: ListView.builder(

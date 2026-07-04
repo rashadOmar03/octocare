@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from models import Appointment, ClinicSettings, Payment
 from audit_service import log_audit
+from clinic_time import clinic_now
 
 ACTIVE_STATUSES = ("pending", "confirmed", "arrived")
 NO_SHOW_STATUSES = ("confirmed", "arrived")
@@ -181,8 +182,8 @@ def auto_cancel_expired_appointments(db: Session) -> int:
     Same-day confirmed patients are kept until the day ends.
     """
     duration = _get_duration(db)
-    now = datetime.now()
-    today = date.today()
+    now = clinic_now().replace(tzinfo=None)
+    today = now.date()
     changed = 0
 
     pending = db.query(Appointment).filter(Appointment.status == "pending").all()

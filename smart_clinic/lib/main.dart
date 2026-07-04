@@ -187,7 +187,11 @@ class SmartClinicApp extends StatelessWidget {
 
           // Receptionist
           AppRoutes.receptionistHome: (_) => const RoleGuard(requiredRole: 'receptionist', child: ReceptionistHomeScreen()),
-          AppRoutes.receptionistAppointments: (_) => const RoleGuard(requiredRole: 'receptionist', child: ReceptionistAppointmentsScreen()),
+          AppRoutes.receptionistAppointments: (context) {
+            final args = ModalRoute.of(context)?.settings.arguments;
+            final tab = args is Map ? (args['initial_tab'] as int? ?? 0) : 0;
+            return RoleGuard(requiredRole: 'receptionist', child: ReceptionistAppointmentsScreen(initialTabIndex: tab));
+          },
           AppRoutes.receptionistQueue: (_) => const RoleGuard(requiredRole: 'receptionist', child: ReceptionistQueueScreen()),
           AppRoutes.receptionistPayments: (_) => const RoleGuard(requiredRole: 'receptionist', child: ReceptionistPaymentsScreen()),
           AppRoutes.receptionistRegisterPatient: (_) => const RoleGuard(requiredRole: 'receptionist', child: ReceptionistRegisterPatientScreen()),

@@ -260,7 +260,11 @@ def receptionist_dashboard(
     today_count = today_q.filter(
         Appointment.status.in_(["pending", "confirmed", "arrived"])
     ).count()
-    pending = today_q.filter(Appointment.status == "pending").count()
+    pending = (
+        db.query(Appointment)
+        .filter(Appointment.status == "pending", Appointment.date >= today)
+        .count()
+    )
     confirmed = today_q.filter(Appointment.status == "confirmed").count()
     completed = today_q.filter(Appointment.status == "completed").count()
     arrived = today_q.filter(Appointment.status == "arrived").count()
@@ -374,6 +378,9 @@ def list_receptionist_appointments(
     query = db.query(Appointment)
     if date_filter:
         query = query.filter(Appointment.date == date_filter)
+    elif status_filter == "pending":
+        # Patient bookings are at least one day ahead — show upcoming pending, not today-only.
+        query = query.filter(Appointment.date >= clinic_today())
     else:
         query = query.filter(Appointment.date == clinic_today())
     if status_filter:

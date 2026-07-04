@@ -147,7 +147,11 @@ class _ReceptionistHomeScreenState extends State<ReceptionistHomeScreen> {
                         value: '${dash?.pending ?? 0}',
                         icon: Icons.pending,
                         color: const Color(0xFFF57C00),
-                        onTap: () => Navigator.pushNamed(context, AppRoutes.receptionistAppointments),
+                        onTap: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.receptionistAppointments,
+                          arguments: {'initial_tab': 0},
+                        ),
                       ),
                     ],
                   ),

@@ -456,6 +456,9 @@ def list_appointments(
     else:
         if date_from:
             query = query.filter(Appointment.date >= date_from)
+        elif current_user.role in ("receptionist", "admin") and status_filter == "pending":
+            # Pending patient bookings are usually tomorrow or later.
+            query = query.filter(Appointment.date >= clinic_today())
         if date_to:
             query = query.filter(Appointment.date <= date_to)
 
