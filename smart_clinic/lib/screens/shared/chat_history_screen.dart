@@ -54,12 +54,13 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
           chatId: chatId,
           welcomeMessage: widget.welcomeMessage,
           showDisclaimer: widget.showDisclaimer,
+          onDeleted: _loadChats,
         ),
       ),
     ).then((_) => _loadChats());
   }
 
-  Future<void> _deleteChat(String chatId) async {
+  Future<bool> _confirmDeleteChat(String chatId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -74,13 +75,22 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true) return false;
     try {
       await ApiService.instance.delete('/ai/chats/$chatId');
-      _loadChats();
+      if (mounted) {
+        showSuccessSnackBar(context, AppLocalizations.tr('chat_deleted'));
+      }
+      return true;
     } catch (e) {
       if (mounted) showErrorSnackBar(context, e);
+      return false;
     }
+  }
+
+  Future<void> _deleteChat(String chatId) async {
+    final deleted = await _confirmDeleteChat(chatId);
+    if (deleted) _loadChats();
   }
 
   String _formatDate(String? iso) {
@@ -155,10 +165,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
                           padding: const EdgeInsets.only(right: 24),
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
-                        confirmDismiss: (_) async {
-                          await _deleteChat(chat['id']);
-                          return false;
-                        },
+                        confirmDismiss: (_) => _confirmDeleteChat(chat['id']),
                         child: ListTile(
                           leading: CircleAvatar(
                             backgroundColor: remaining <= 5
@@ -195,7 +202,11 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
                                     style: theme.textTheme.labelSmall?.copyWith(color: Colors.red),
                                   ),
                                 ),
-                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                tooltip: AppLocalizations.tr('delete'),
+                                onPressed: () => _deleteChat(chat['id']),
+                              ),
                               const Icon(Icons.chevron_right, size: 20),
                             ],
                           ),
@@ -209,27 +220,75 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
   }
 }
 
-class _ChatViewScreen extends StatelessWidget {
+class _ChatViewScreen extends StatefulWidget {
   final String? chatId;
   final String welcomeMessage;
   final bool showDisclaimer;
+  final VoidCallback? onDeleted;
 
   const _ChatViewScreen({
     this.chatId,
     required this.welcomeMessage,
     required this.showDisclaimer,
+    this.onDeleted,
   });
+
+  @override
+  State<_ChatViewScreen> createState() => _ChatViewScreenState();
+}
+
+class _ChatViewScreenState extends State<_ChatViewScreen> {
+  Future<void> _deleteCurrentChat() async {
+    final chatId = widget.chatId;
+    if (chatId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppLocalizations.tr('delete')),
+        content: Text(AppLocalizations.tr('delete_chat_confirm')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.tr('cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppLocalizations.tr('delete'), style: const TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ApiService.instance.delete('/ai/chats/$chatId');
+      widget.onDeleted?.call();
+      if (mounted) {
+        showSuccessSnackBar(context, AppLocalizations.tr('chat_deleted'));
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) showErrorSnackBar(context, e);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(AppLocalizations.tr('ai_assistant')),
+        actions: [
+          if (widget.chatId != null)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              color: Colors.red,
+              tooltip: AppLocalizations.tr('delete'),
+              onPressed: _deleteCurrentChat,
+            ),
+        ],
       ),
       body: AiChatPanel(
-        welcomeMessage: welcomeMessage,
-        showDisclaimer: showDisclaimer,
-        initialChatId: chatId,
+        welcomeMessage: widget.welcomeMessage,
+        showDisclaimer: widget.showDisclaimer,
+        initialChatId: widget.chatId,
       ),
     );
   }

@@ -544,6 +544,7 @@ class AppStringsEn {
     'no_chats_yet': 'No chats yet',
     'start_new_chat_hint': 'Tap + to start a new conversation',
     'delete_chat_confirm': 'Delete this chat? This cannot be undone.',
+    'chat_deleted': 'Chat deleted',
     'messages_used': 'Messages',
     'messages_label': 'messages',
     'chat_limit_reached': 'This chat has reached its message limit. Please start a new chat.',

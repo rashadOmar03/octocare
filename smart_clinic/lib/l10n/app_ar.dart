@@ -544,6 +544,7 @@ class AppStringsAr {
     'no_chats_yet': 'لا توجد محادثات بعد',
     'start_new_chat_hint': 'اضغط + لبدء محادثة جديدة',
     'delete_chat_confirm': 'هل تريد حذف هذه المحادثة؟ لا يمكن التراجع.',
+    'chat_deleted': 'تم حذف المحادثة',
     'messages_used': 'الرسائل',
     'messages_label': 'رسالة',
     'chat_limit_reached': 'وصلت هذه المحادثة لحد الرسائل. ابدأ محادثة جديدة.',
