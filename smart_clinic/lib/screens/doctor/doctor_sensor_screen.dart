@@ -18,8 +18,8 @@ class DoctorSensorScreen extends StatefulWidget {
 }
 
 class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
-  static const int _waveformCapacity = 250;
-  static const Duration _uiRefreshInterval = Duration(milliseconds: 16);
+  static const int _waveformCapacity = 600;
+  static const Duration _uiRefreshInterval = Duration(milliseconds: 33);
 
   final SensorService _sensorService = SensorService();
   final WifiSensorService _wifi = WifiSensorService.instance;
@@ -56,6 +56,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
   String? _lastHost;
   Timer? _uiRefreshTimer;
   bool _needsUiRefresh = false;
+  int _readingSession = 0;
 
   @override
   void initState() {
@@ -168,15 +169,13 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
   }
 
   Future<void> _disconnectSensors() async {
+    final session = ++_readingSession;
     _noDataTimer?.cancel();
     _noDataTimer = null;
-    await _readingSub?.cancel();
-    _readingSub = null;
-    await _rawSub?.cancel();
-    _rawSub = null;
-    await _connectionSub?.cancel();
-    _connectionSub = null;
-    await _wifi.disconnect();
+    _uiRefreshTimer?.cancel();
+    _uiRefreshTimer = null;
+    _needsUiRefresh = false;
+
     setState(() {
       _isConnected = false;
       _isMeasuring = false;
@@ -186,15 +185,31 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
       _bytesReceived = 0;
       _clearReadings();
     });
+
+    await _readingSub?.cancel();
+    _readingSub = null;
+    await _rawSub?.cancel();
+    _rawSub = null;
+    await _connectionSub?.cancel();
+    _connectionSub = null;
+    await _wifi.disconnect();
+
+    if (!mounted || session != _readingSession) return;
+    _flushUiRefresh();
   }
 
   void _handleConnectionLost() {
     if (!mounted || !_isConnected || _isConnecting) return;
+    ++_readingSession;
+    _uiRefreshTimer?.cancel();
+    _uiRefreshTimer = null;
+    _needsUiRefresh = false;
     setState(() {
       _isConnected = false;
       _isMeasuring = false;
       _sensorAttached = false;
       _connectedLabel = null;
+      _clearReadings();
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -229,6 +244,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
     }
 
     _lastHost = host;
+    final session = ++_readingSession;
 
     try {
       await _readingSub?.cancel();
@@ -249,12 +265,15 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
 
       await _wifi.connect(host: host, port: port);
 
-      if (!mounted) return;
+      if (!mounted || session != _readingSession) return;
       _connectionSub = _wifi.connectionState.listen((connected) {
         if (!connected) _handleConnectionLost();
       });
       _readingSub = _wifi.readings.listen(
-        _onSensorReading,
+        (reading) {
+          if (session != _readingSession) return;
+          _onSensorReading(reading);
+        },
         onError: (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -263,7 +282,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
         },
       );
       _rawSub = _wifi.rawLines.listen((line) {
-        if (!mounted) return;
+        if (!mounted || session != _readingSession) return;
         _lastRawLine = line;
         _bytesReceived = _wifi.bytesReceived;
         _scheduleUiRefresh();
@@ -313,13 +332,9 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
   }
 
   void _onSensorReading(SensorReading reading) {
-    if (!_isConnected) return;
+    if (!_isConnected || !_isMeasuring) return;
 
     _sensorAttached = reading.attached;
-    if (!_isMeasuring) {
-      _scheduleUiRefresh();
-      return;
-    }
 
     if (!reading.attached) {
       _heartRate = null;
@@ -672,8 +687,8 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                     shortLabel: 'ECG',
                     samples: _ecgSamples,
                     currentValue: _ecg ?? (_ecgSamples.isNotEmpty ? _ecgSamples.last : null),
-                    color: const Color(0xFFC62828),
-                    height: 120,
+                    color: const Color(0xFF42A5F5),
+                    height: 150,
                   ),
                   const SizedBox(height: 8),
                   SensorWaveformChart(
@@ -681,8 +696,8 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                     shortLabel: 'EMG',
                     samples: _emgSamples,
                     currentValue: _emg ?? (_emgSamples.isNotEmpty ? _emgSamples.last : null),
-                    color: const Color(0xFF00838F),
-                    height: 120,
+                    color: const Color(0xFFEF5350),
+                    height: 150,
                   ),
                   const SizedBox(height: 8),
                   SensorWaveformChart(
@@ -690,8 +705,8 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                     shortLabel: 'GSR',
                     samples: _gsrSamples,
                     currentValue: _gsr,
-                    color: const Color(0xFF6A1B9A),
-                    height: 120,
+                    color: const Color(0xFF66BB6A),
+                    height: 150,
                   ),
                   const SizedBox(height: 24),
                   Row(

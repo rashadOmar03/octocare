@@ -10,7 +10,8 @@ class SensorWaveformChart extends StatelessWidget {
     this.currentValue,
     this.unit = '',
     this.shortLabel,
-    this.height = 100,
+    this.height = 150,
+    this.plotterStyle = true,
   });
 
   final String title;
@@ -20,11 +21,13 @@ class SensorWaveformChart extends StatelessWidget {
   final String unit;
   final String? shortLabel;
   final double height;
+  final bool plotterStyle;
 
   String get _label => shortLabel ?? title;
 
   String _formatValue(double? value) {
     if (value == null) return '--';
+    if (value.abs() >= 100) return value.round().toString();
     if (value == value.roundToDouble()) return value.round().toString();
     return value.toStringAsFixed(1);
   }
@@ -37,9 +40,16 @@ class SensorWaveformChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final outline = Theme.of(context).colorScheme.outline.withValues(alpha: 0.25);
+    final plotBg = plotterStyle ? const Color(0xFF252526) : Theme.of(context).colorScheme.surfaceContainerHighest;
+    final gridColor = plotterStyle
+        ? const Color(0xFF3E3E42)
+        : Theme.of(context).colorScheme.outline.withValues(alpha: 0.25);
+    final axisColor = plotterStyle
+        ? const Color(0xFFCCCCCC)
+        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65);
 
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: Column(
@@ -74,70 +84,76 @@ class SensorWaveformChart extends StatelessWidget {
                 child: Text(title, style: Theme.of(context).textTheme.bodySmall),
               ),
             const SizedBox(height: 8),
-            SizedBox(
+            Container(
               height: height,
-              child: samples.isEmpty
+              decoration: BoxDecoration(
+                color: plotBg,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: gridColor),
+              ),
+              child: samples.length < 2
                   ? Center(
                       child: Text(
                         '--',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.outline,
+                              color: axisColor.withValues(alpha: 0.7),
                             ),
                       ),
                     )
-                  : LineChart(
-                      LineChartData(
-                        minX: 0,
-                        maxX: (samples.length - 1).toDouble().clamp(0, double.infinity),
-                        minY: _minY,
-                        maxY: _maxY,
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                          horizontalInterval: _gridInterval,
-                          getDrawingHorizontalLine: (_) => FlLine(color: outline, strokeWidth: 1),
-                        ),
-                        titlesData: FlTitlesData(
-                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 36,
-                              interval: _gridInterval,
-                              getTitlesWidget: (value, meta) => Text(
-                                _formatAxis(value),
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
-                                      fontSize: 10,
-                                    ),
+                  : Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 6, 8, 4),
+                      child: LineChart(
+                        LineChartData(
+                          minX: 0,
+                          maxX: (samples.length - 1).toDouble(),
+                          minY: _minY,
+                          maxY: _maxY,
+                          clipData: const FlClipData.all(),
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: true,
+                            verticalInterval: _verticalInterval,
+                            horizontalInterval: _gridInterval,
+                            getDrawingHorizontalLine: (_) => FlLine(color: gridColor, strokeWidth: 0.8),
+                            getDrawingVerticalLine: (_) => FlLine(color: gridColor.withValues(alpha: 0.55), strokeWidth: 0.6),
+                          ),
+                          titlesData: FlTitlesData(
+                            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 40,
+                                interval: _gridInterval,
+                                getTitlesWidget: (value, meta) => Text(
+                                  _formatAxis(value),
+                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                        color: axisColor,
+                                        fontSize: 10,
+                                      ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        borderData: FlBorderData(
-                          show: true,
-                          border: Border(
-                            bottom: BorderSide(color: outline),
-                            left: BorderSide(color: outline),
-                          ),
-                        ),
-                        lineTouchData: const LineTouchData(enabled: false),
-                        lineBarsData: [
-                          LineChartBarData(
-                            spots: List.generate(
-                              samples.length,
-                              (i) => FlSpot(i.toDouble(), samples[i]),
+                          borderData: FlBorderData(show: false),
+                          lineTouchData: const LineTouchData(enabled: false),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: List.generate(
+                                samples.length,
+                                (i) => FlSpot(i.toDouble(), samples[i]),
+                              ),
+                              isCurved: false,
+                              isStepLineChart: false,
+                              color: color,
+                              barWidth: 1.4,
+                              dotData: const FlDotData(show: false),
                             ),
-                            isCurved: false,
-                            color: color,
-                            barWidth: 1.8,
-                            dotData: const FlDotData(show: false),
-                          ),
-                        ],
+                          ],
+                        ),
+                        duration: Duration.zero,
                       ),
-                      duration: Duration.zero,
                     ),
             ),
           ],
@@ -156,7 +172,7 @@ class SensorWaveformChart extends StatelessWidget {
     var minY = samples.reduce((a, b) => a < b ? a : b);
     var maxY = samples.reduce((a, b) => a > b ? a : b);
     if (minY == maxY) return minY - 1;
-    final pad = (maxY - minY) * 0.12;
+    final pad = (maxY - minY) * 0.08;
     return minY - pad;
   }
 
@@ -164,7 +180,7 @@ class SensorWaveformChart extends StatelessWidget {
     var minY = samples.reduce((a, b) => a < b ? a : b);
     var maxY = samples.reduce((a, b) => a > b ? a : b);
     if (minY == maxY) return maxY + 1;
-    final pad = (maxY - minY) * 0.12;
+    final pad = (maxY - minY) * 0.08;
     return maxY + pad;
   }
 
@@ -175,6 +191,14 @@ class SensorWaveformChart extends StatelessWidget {
     if (span <= 20) return 5;
     if (span <= 100) return 20;
     if (span <= 500) return 100;
-    return span / 4;
+    if (span <= 1000) return 200;
+    return span / 5;
+  }
+
+  double get _verticalInterval {
+    if (samples.length <= 60) return 10;
+    if (samples.length <= 150) return 25;
+    if (samples.length <= 300) return 50;
+    return 80;
   }
 }

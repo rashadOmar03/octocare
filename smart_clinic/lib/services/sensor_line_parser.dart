@@ -20,6 +20,11 @@ class SensorLineParser {
       return null;
     }
 
+    if (!trimmed.contains(':')) {
+      final plotter = _parsePlotterLine(trimmed);
+      if (plotter != null) return plotter;
+    }
+
     if (trimmed.startsWith('{')) {
       try {
         final map = json.decode(trimmed) as Map<String, dynamic>;
@@ -133,6 +138,64 @@ class SensorLineParser {
       ecg: derived.$1,
       emg: derived.$2,
       gsr: derived.$3,
+    );
+  }
+
+  /// Arduino Serial Plotter CSV: ECG,EMG,GSR,BPM,Temp (or fewer columns).
+  static SensorReading? _parsePlotterLine(String trimmed) {
+    final parts = trimmed
+        .split(RegExp(r'[,\t;]+'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (parts.length < 3) return null;
+
+    double? ecg;
+    double? emg;
+    double? gsr;
+    double? hr;
+    double? temp;
+
+    if (parts.length >= 5) {
+      ecg = _toDouble(parts[0]);
+      emg = _toDouble(parts[1]);
+      gsr = _toDouble(parts[2]);
+      hr = _toDouble(parts[3]);
+      temp = _parseTemperature(parts[4]);
+    } else if (parts.length == 4) {
+      ecg = _toDouble(parts[0]);
+      emg = _toDouble(parts[1]);
+      gsr = _toDouble(parts[2]);
+      hr = _toDouble(parts[3]);
+    } else {
+      ecg = _toDouble(parts[0]);
+      emg = _toDouble(parts[1]);
+      gsr = _toDouble(parts[2]);
+    }
+
+    if (ecg == null && emg == null && gsr == null && hr == null && temp == null) {
+      return null;
+    }
+
+    final attached = _inferAttached(hr, temp, ecg, emg, gsr);
+    if (!attached) {
+      return const SensorReading(
+        attached: false,
+        heartRate: null,
+        temperature: null,
+        ecg: null,
+        emg: null,
+        gsr: null,
+      );
+    }
+
+    return SensorReading(
+      attached: true,
+      heartRate: hr,
+      temperature: temp,
+      ecg: ecg,
+      emg: emg,
+      gsr: gsr,
     );
   }
 

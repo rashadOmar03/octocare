@@ -30,6 +30,7 @@ class WifiSensorService {
   int _bytesReceived = 0;
   String? _lastRawLine;
   String? _connectedLabel;
+  bool _accepting = false;
   final _utf8Decoder = Utf8Decoder(allowMalformed: true);
 
   Stream<SensorReading> get readings => _controller.stream;
@@ -82,6 +83,7 @@ class WifiSensorService {
     _buffer = '';
     _bytesReceived = 0;
     _lastRawLine = null;
+    _accepting = true;
 
     if (kIsWeb || useCloudLive) {
       _connectedLabel = 'Cloud (${Uri.parse(ApiConfig.url).host})';
@@ -110,6 +112,7 @@ class WifiSensorService {
   }
 
   void _onBytes(List<int> data) {
+    if (!_accepting) return;
     _bytesReceived += data.length;
     _buffer += _utf8Decoder.convert(data);
     _buffer = _buffer.replaceAll('\r', '');
@@ -131,6 +134,7 @@ class WifiSensorService {
   }
 
   Future<void> _handleConnectionLost([Object? _]) async {
+    _accepting = false;
     final wasConnected = _transport != null;
     await _transport?.dispose();
     _transport = null;
@@ -142,6 +146,8 @@ class WifiSensorService {
   }
 
   Future<void> disconnect() async {
+    _accepting = false;
+    _buffer = '';
     await _handleConnectionLost();
     _bytesReceived = 0;
     _lastRawLine = null;
