@@ -67,7 +67,18 @@ def _enrich_prescription(prescription: Prescription, db: Session) -> dict:
         "patient_id": patient_id,
         "patient_name": patient_name,
         "doctor_name": doctor_name,
-        "items": prescription.items,
+        "items": [
+            {
+                "id": item.id,
+                "prescription_id": item.prescription_id,
+                "medication_name": item.medication_name,
+                "dosage": item.dosage,
+                "frequency": item.frequency,
+                "duration": item.duration,
+                "notes": item.notes,
+            }
+            for item in (prescription.items or [])
+        ],
     }
 
 

@@ -32,6 +32,24 @@ class _ReceptionistBookAppointmentScreenState extends State<ReceptionistBookAppo
   void initState() {
     super.initState();
     _loadDoctors();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _applyRouteArgs());
+  }
+
+  void _applyRouteArgs() {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is! Map) return;
+    final profileId = args['profile_id']?.toString();
+    final patientName = args['patient_name']?.toString();
+    if (profileId == null || profileId.isEmpty) return;
+    setState(() {
+      _selectedPatient = PatientSearchResult(
+        profileId: profileId,
+        name: patientName ?? 'Patient',
+        email: '',
+        phone: '',
+      );
+      _searchController.text = patientName ?? '';
+    });
   }
 
   @override

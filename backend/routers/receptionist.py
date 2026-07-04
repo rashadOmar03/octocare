@@ -351,7 +351,7 @@ def clinic_info(
 def list_patients(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
-    current_user: User = Depends(require_role("receptionist", "admin", "doctor")),
+    current_user: User = Depends(require_role("receptionist", "admin")),
     db: Session = Depends(get_db),
 ):
     """List all patients (paginated)."""
@@ -380,7 +380,7 @@ def list_patients(
 def search_patients(
     q: str = Query("", alias="q"),
     limit: int = Query(25, ge=1, le=50),
-    current_user: User = Depends(require_role("receptionist", "admin", "doctor")),
+    current_user: User = Depends(require_role("receptionist", "admin")),
     db: Session = Depends(get_db),
 ):
     term = q.strip()
@@ -692,6 +692,8 @@ def register_patient(
     return {
         "message": "Patient registered successfully. They can log in with the temporary password.",
         "user_id": user_id,
+        "profile_id": profile.id,
+        "patient_name": f"{profile.first_name or ''} {profile.last_name or ''}".strip(),
         "email": email,
         "temp_password": temp_password,
         "temporary_password": temp_password,

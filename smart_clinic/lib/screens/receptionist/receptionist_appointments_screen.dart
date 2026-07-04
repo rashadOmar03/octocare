@@ -50,12 +50,23 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this, initialIndex: widget.initialTabIndex.clamp(0, 4));
+    _tabController.addListener(_onTabChanged);
     _dateScope = _parseDateScope(widget.initialDateScope);
     _loadData();
   }
 
+  void _onTabChanged() {
+    if (!_tabController.indexIsChanging) return;
+    final idx = _tabController.index;
+    if (idx >= 3 && _dateScope == _DateScope.upcoming) {
+      setState(() => _dateScope = _DateScope.all);
+      _loadData();
+    }
+  }
+
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -78,7 +89,11 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
         case _DateScope.all:
           _allAppointments = await _service.getAppointments(dateFrom: '2000-01-01');
         case _DateScope.upcoming:
-          _allAppointments = await _service.getAppointments();
+          if (_tabController.index >= 3) {
+            _allAppointments = await _service.getAppointments(dateFrom: '2000-01-01');
+          } else {
+            _allAppointments = await _service.getAppointments();
+          }
       }
     } catch (e) {
       _loadError = extractApiError(e);

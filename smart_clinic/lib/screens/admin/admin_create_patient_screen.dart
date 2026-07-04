@@ -126,8 +126,8 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
                   validator: (v) => v == null ? AppLocalizations.tr('field_required') : null,
                 ),
                 CustomTextField(controller: _addressController, label: AppLocalizations.tr('address'), prefixIcon: Icons.location_on, maxLines: 2, validator: (v) => v == null || v.trim().isEmpty ? AppLocalizations.tr('field_required') : null),
-                CustomTextField(controller: _emergencyNameController, label: AppLocalizations.tr('emergency_contact_name'), prefixIcon: Icons.contact_emergency, validator: (v) => v == null || v.trim().isEmpty ? AppLocalizations.tr('emergency_contact_required') : null),
-                CustomTextField(controller: _emergencyPhoneController, label: AppLocalizations.tr('emergency_contact_phone'), prefixIcon: Icons.phone, keyboardType: TextInputType.phone, validator: (v) => v == null || v.trim().isEmpty ? AppLocalizations.tr('emergency_contact_required') : null),
+                CustomTextField(controller: _emergencyNameController, label: '${AppLocalizations.tr('emergency_contact_name')} (${AppLocalizations.tr('optional_field')})', prefixIcon: Icons.contact_emergency),
+                CustomTextField(controller: _emergencyPhoneController, label: '${AppLocalizations.tr('emergency_contact_phone')} (${AppLocalizations.tr('optional_field')})', prefixIcon: Icons.phone, keyboardType: TextInputType.phone),
                 DropdownButtonFormField<String>(
                   initialValue: _bloodType,
                   decoration: InputDecoration(labelText: AppLocalizations.tr('blood_type'), prefixIcon: const Icon(Icons.bloodtype)),

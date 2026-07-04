@@ -33,6 +33,8 @@ class _ReceptionistRegisterPatientScreenState extends State<ReceptionistRegister
   String? _tempPassword;
   bool _registrationComplete = false;
   bool _welcomeEmailSent = true;
+  String? _registeredProfileId;
+  String? _registeredPatientName;
 
   final List<String> _bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
@@ -69,6 +71,8 @@ class _ReceptionistRegisterPatientScreenState extends State<ReceptionistRegister
       _bloodType = null;
       _tempPassword = null;
       _registrationComplete = false;
+      _registeredProfileId = null;
+      _registeredPatientName = null;
     });
   }
 
@@ -101,6 +105,9 @@ class _ReceptionistRegisterPatientScreenState extends State<ReceptionistRegister
       setState(() {
         _tempPassword = response['temp_password'] ?? response['temporary_password'] ?? response['password'];
         _welcomeEmailSent = response['welcome_email_sent'] != false;
+        _registeredProfileId = response['profile_id']?.toString();
+        _registeredPatientName = response['patient_name']?.toString() ??
+            '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'.trim();
         _registrationComplete = true;
       });
       if (mounted) {
@@ -158,7 +165,17 @@ class _ReceptionistRegisterPatientScreenState extends State<ReceptionistRegister
                             const SizedBox(width: 8),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: () => Navigator.pushNamed(context, AppRoutes.receptionistBookAppointment),
+                                onPressed: () async {
+                                  await Navigator.pushNamed(
+                                    context,
+                                    AppRoutes.receptionistBookAppointment,
+                                    arguments: {
+                                      if (_registeredProfileId != null) 'profile_id': _registeredProfileId,
+                                      if (_registeredPatientName != null) 'patient_name': _registeredPatientName,
+                                    },
+                                  );
+                                  if (mounted) _clearForm();
+                                },
                                 child: Text(AppLocalizations.tr('book_appointment')),
                               ),
                             ),
@@ -191,8 +208,8 @@ class _ReceptionistRegisterPatientScreenState extends State<ReceptionistRegister
                 Text(AppLocalizations.tr('contact_info'), style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
                 CustomTextField(controller: _addressController, label: AppLocalizations.tr('address'), prefixIcon: Icons.location_on, maxLines: 2, validator: (v) => v == null || v.trim().isEmpty ? AppLocalizations.tr('field_required') : null),
-                CustomTextField(controller: _emergencyNameController, label: AppLocalizations.tr('emergency_contact_name'), prefixIcon: Icons.contact_emergency, validator: (v) => v == null || v.trim().isEmpty ? AppLocalizations.tr('emergency_contact_required') : null),
-                CustomTextField(controller: _emergencyPhoneController, label: AppLocalizations.tr('emergency_contact_phone'), prefixIcon: Icons.phone, keyboardType: TextInputType.phone, validator: (v) => v == null || v.trim().isEmpty ? AppLocalizations.tr('emergency_contact_required') : null),
+                CustomTextField(controller: _emergencyNameController, label: '${AppLocalizations.tr('emergency_contact_name')} (${AppLocalizations.tr('optional_field')})', prefixIcon: Icons.contact_emergency),
+                CustomTextField(controller: _emergencyPhoneController, label: '${AppLocalizations.tr('emergency_contact_phone')} (${AppLocalizations.tr('optional_field')})', prefixIcon: Icons.phone, keyboardType: TextInputType.phone),
                 const SizedBox(height: 16),
                 Text(AppLocalizations.tr('medical_info'), style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),

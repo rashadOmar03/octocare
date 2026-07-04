@@ -16,12 +16,35 @@ def get_doctor(user: User, db: Session) -> Doctor | None:
     return db.query(Doctor).filter(Doctor.profile_id == profile.id).first()
 
 
+def doctor_has_patient(user: User, patient_id: str, db: Session) -> bool:
+    doctor = get_doctor(user, db)
+    if not doctor:
+        return False
+    return (
+        db.query(Appointment.id)
+        .filter(
+            Appointment.doctor_id == doctor.id,
+            Appointment.patient_id == patient_id,
+        )
+        .first()
+        is not None
+    )
+
+
+def assert_doctor_patient_access(user: User, patient_id: str, db: Session) -> None:
+    if not doctor_has_patient(user, patient_id, db):
+        raise HTTPException(status_code=403, detail="You can only access your own patients")
+
+
 def is_staff(user: User) -> bool:
     return user.role in ("receptionist", "admin")
 
 
 def assert_patient_profile_access(user: User, patient_id: str, db: Session) -> None:
-    if user.role in ("doctor", "receptionist", "admin"):
+    if user.role in ("receptionist", "admin"):
+        return
+    if user.role == "doctor":
+        assert_doctor_patient_access(user, patient_id, db)
         return
     profile = get_profile(user, db)
     if not profile or profile.id != patient_id:
@@ -69,7 +92,7 @@ def assert_record_read(user: User, record: MedicalRecord, db: Session) -> None:
         return
     if user.role == "doctor":
         doctor = get_doctor(user, db)
-        if not doctor:
+        if not doctor or record.doctor_id != doctor.id:
             raise HTTPException(status_code=403, detail="Access denied")
         return
     raise HTTPException(status_code=403, detail="Access denied")
@@ -95,6 +118,9 @@ def assert_prescription_read(user: User, prescription: Prescription, db: Session
         assert_record_read(user, record, db)
         return
     if user.role == "doctor":
+        doctor = get_doctor(user, db)
+        if not doctor or record.doctor_id != doctor.id:
+            raise HTTPException(status_code=403, detail="Access denied")
         return
     if is_staff(user):
         return
@@ -113,7 +139,10 @@ def assert_prescription_write(user: User, prescription: Prescription, db: Sessio
 
 
 def assert_document_access(user: User, doc: Document, db: Session, *, write: bool = False) -> None:
-    if user.role in ("doctor", "receptionist", "admin"):
+    if user.role in ("receptionist", "admin"):
+        return
+    if user.role == "doctor":
+        assert_doctor_patient_access(user, doc.patient_id, db)
         return
     profile = get_profile(user, db)
     if not profile or doc.patient_id != profile.id:

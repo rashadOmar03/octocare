@@ -1,4 +1,5 @@
 import io
+import json
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
@@ -193,7 +194,10 @@ def _require_roles(user: User, *roles: str) -> None:
 
 def _get_clinic_name(db: Session) -> str:
     settings = db.query(ClinicSettings).first()
-    return settings.clinic_name if settings else "Octocare Clinic"
+    name = settings.clinic_name if settings else "Octocare Clinic"
+    if name.strip().lower() in ("smart clinic", "smart clinic "):
+        return "Octocare Clinic"
+    return name or "Octocare Clinic"
 
 
 def _doctor_display_name(db: Session, doctor_id: str) -> str:
@@ -361,9 +365,91 @@ def _make_line_chart(
 
     if len(poly_points) >= 4:
         d.add(PolyLine(poly_points, strokeColor=colors.HexColor(color), strokeWidth=1.8))
+    elif len(poly_points) == 2:
+        d.add(Line(poly_points[0], poly_points[1], poly_points[0] + plot_w, poly_points[1],
+                   strokeColor=colors.HexColor(color), strokeWidth=1.8))
 
     d.add(String(x0, 0, "Oldest reading → newest (left to right)", fontSize=7, fillColor=colors.grey))
     return d
+
+
+def _make_waveform_chart(
+    title: str,
+    description: str,
+    values: list[float],
+    ylabel: str,
+    color: str,
+) -> Drawing:
+    width, chart_height = 460, 120
+    total_height = chart_height + 54
+    d = Drawing(width, total_height)
+    d.add(String(0, total_height - 18, title, fontSize=11, fillColor=colors.HexColor("#2c3e50")))
+    d.add(String(0, total_height - 32, description, fontSize=8, fillColor=colors.grey))
+
+    clean = [float(v) for v in values if v is not None]
+    if len(clean) > 200:
+        clean = clean[-200:]
+    if len(clean) < 2:
+        d.add(String(0, 40, "No waveform data", fontSize=9))
+        return d
+
+    min_v = min(clean)
+    max_v = max(clean)
+    spread = max(max_v - min_v, 1.0)
+    pad = spread * 0.08
+    min_y = min_v - pad
+    max_y = max_v + pad
+
+    x0, y0 = 48, 14
+    plot_w = width - 62
+    plot_h = chart_height - 12
+
+    d.add(Line(x0, y0, x0, y0 + plot_h, strokeColor=colors.HexColor("#bdc3c7")))
+    d.add(Line(x0, y0, x0 + plot_w, y0, strokeColor=colors.HexColor("#bdc3c7")))
+    d.add(String(2, y0 + plot_h / 2, ylabel, fontSize=7, fillColor=colors.grey))
+
+    for tick in range(5):
+        frac = tick / 4
+        y_val = min_y + frac * (max_y - min_y)
+        y = y0 + frac * plot_h
+        d.add(String(2, y - 3, f"{y_val:.0f}", fontSize=6, fillColor=colors.grey))
+        d.add(Line(x0, y, x0 + plot_w, y, strokeColor=colors.HexColor("#ecf0f1"), strokeWidth=0.5))
+
+    poly_points: list[float] = []
+    n = len(clean)
+    for i, v in enumerate(clean):
+        x = x0 + (i / max(n - 1, 1)) * plot_w
+        y = y0 + ((v - min_y) / (max_y - min_y)) * plot_h
+        poly_points.extend([x, y])
+
+    if len(poly_points) >= 4:
+        d.add(PolyLine(poly_points, strokeColor=colors.HexColor(color), strokeWidth=1.4))
+
+    d.add(String(x0, 0, "Live waveform snapshot (most recent reading)", fontSize=7, fillColor=colors.grey))
+    return d
+
+
+def _waveform_values(sensor: SensorData | None, field: str) -> list[float]:
+    if not sensor or not sensor.waveforms:
+        return []
+    wf = sensor.waveforms
+    if isinstance(wf, str):
+        try:
+            wf = json.loads(wf)
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(wf, dict):
+        return []
+    raw = wf.get(field) or []
+    if not isinstance(raw, list):
+        return []
+    out: list[float] = []
+    for item in raw:
+        try:
+            out.append(float(item))
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def _generate_patient_report(profile, db: Session):
@@ -539,8 +625,6 @@ def _generate_patient_report(profile, db: Session):
                 if val is None:
                     continue
                 fv = float(val)
-                if fv <= 0:
-                    continue
                 out.append((label_for(s), fv))
             return out
 
@@ -552,22 +636,32 @@ def _generate_patient_report(profile, db: Session):
 
         elements.append(Paragraph("Sensor Charts", subtitle_style))
         elements.append(Paragraph(
-            "Waveform charts: ECG, EMG, and GSR only. Heart rate and temperature are shown as numbers in the table above.",
+            "Waveform charts from the most recent sensor session. Heart rate and temperature are in the tables above.",
             body_style,
         ))
         elements.append(Spacer(1, 6))
 
-        chart_specs = [
-            ("GSR Chart", "Galvanic skin response (stress/conductance).", gsr_points, "GSR", "#6A1B9A"),
-            ("ECG Chart", "Electrocardiogram signal level from clinic sensor.", ecg_points, "ECG", "#C62828"),
-            ("EMG Chart", "Electromyography signal level from clinic sensor.", emg_points, "EMG", "#00838F"),
+        latest_for_wave = latest_sensor or (ordered[-1] if ordered else None)
+        wf_specs = [
+            ("ECG Chart", "Electrocardiogram waveform.", "ecg", _waveform_values(latest_for_wave, "ecg"), ecg_points, "ECG", "#42A5F5"),
+            ("EMG Chart", "Electromyography waveform.", "emg", _waveform_values(latest_for_wave, "emg"), emg_points, "EMG", "#EF5350"),
+            ("GSR Chart", "Galvanic skin response waveform.", "gsr", _waveform_values(latest_for_wave, "gsr"), gsr_points, "GSR", "#66BB6A"),
         ]
-        for title, desc, pts, ylab, col in chart_specs:
-            if not pts:
+        charts_added = 0
+        for title, desc, _field, wf_vals, scalar_pts, ylab, col in wf_specs:
+            if len(wf_vals) >= 2:
+                chart = _make_waveform_chart(title, desc, wf_vals, ylab, col)
+                charts_added += 1
+            elif scalar_pts:
+                chart = _make_line_chart(title, desc + " (reading levels over time)", scalar_pts, ylab, col)
+                charts_added += 1
+            else:
                 continue
-            chart = _make_line_chart(title, desc, pts, ylab, col)
-            elements.append(_ChartFlowable(chart, 460, 164))
+            elements.append(_ChartFlowable(chart, 460, 174))
             elements.append(Spacer(1, 8))
+
+        if charts_added == 0:
+            elements.append(Paragraph("No chartable sensor waveform data yet.", body_style))
 
     doc.build(
         elements,

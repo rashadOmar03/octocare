@@ -267,8 +267,27 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             barGroups: bars,
             minY: 0,
             maxY: maxVal < 1 ? 1 : maxVal + 1,
-            gridData: const FlGridData(show: true),
+            gridData: FlGridData(
+              show: true,
+              horizontalInterval: maxVal < 1 ? 1 : 1,
+              getDrawingHorizontalLine: (_) => FlLine(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                strokeWidth: 1,
+              ),
+              drawVerticalLine: false,
+            ),
             titlesData: FlTitlesData(
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 28,
+                  interval: maxVal < 1 ? 1 : 1,
+                  getTitlesWidget: (value, meta) {
+                    if (value != value.roundToDouble()) return const SizedBox.shrink();
+                    return Text('${value.toInt()}', style: const TextStyle(fontSize: 10));
+                  },
+                ),
+              ),
               rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
               topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
               bottomTitles: AxisTitles(

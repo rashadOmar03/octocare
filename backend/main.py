@@ -70,8 +70,22 @@ def on_startup():
     _sync_admin_account()
     _normalize_user_emails()
     _repair_appointments()
+    _migrate_clinic_branding()
     _run_db_maintenance()
     _log_smtp_status()
+
+
+def _migrate_clinic_branding():
+    db = SessionLocal()
+    try:
+        settings = db.query(ClinicSettings).first()
+        if settings and (settings.clinic_name or "").strip().lower() == "smart clinic":
+            settings.clinic_name = "Octocare Clinic"
+            db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
 
 
 def _run_db_maintenance():
