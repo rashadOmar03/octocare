@@ -29,7 +29,6 @@ class WifiSensorService {
   String _buffer = '';
   int _bytesReceived = 0;
   String? _lastRawLine;
-  String? _lastEmittedLine;
   String? _connectedLabel;
   final _utf8Decoder = Utf8Decoder(allowMalformed: true);
 
@@ -83,7 +82,6 @@ class WifiSensorService {
     _buffer = '';
     _bytesReceived = 0;
     _lastRawLine = null;
-    _lastEmittedLine = null;
 
     if (kIsWeb || useCloudLive) {
       _connectedLabel = 'Cloud (${Uri.parse(ApiConfig.url).host})';
@@ -125,9 +123,6 @@ class WifiSensorService {
       _lastRawLine = line;
       if (!_rawController.isClosed) _rawController.add(line);
 
-      if (line == _lastEmittedLine) continue;
-      _lastEmittedLine = line;
-
       final parsed = SensorLineParser.parseLine(line);
       if (parsed != null && !_controller.isClosed) {
         _controller.add(parsed);
@@ -150,7 +145,6 @@ class WifiSensorService {
     await _handleConnectionLost();
     _bytesReceived = 0;
     _lastRawLine = null;
-    _lastEmittedLine = null;
   }
 
   void dispose() {

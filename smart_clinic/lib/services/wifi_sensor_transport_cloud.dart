@@ -9,7 +9,6 @@ import 'wifi_sensor_transport.dart';
 class CloudPollWifiSensorTransport implements WifiSensorTransport {
   Timer? _timer;
   bool _connected = false;
-  String? _lastLine;
 
   static String pollUrlFromWs(String? webSocketUrl) {
     if (webSocketUrl == null || webSocketUrl.isEmpty) {
@@ -35,30 +34,24 @@ class CloudPollWifiSensorTransport implements WifiSensorTransport {
   }) async {
     final pollUrl = pollUrlFromWs(webSocketUrl);
     _connected = true;
-    _lastLine = null;
 
-    Future<void> pollOnce({required bool strict}) async {
+    Future<void> pollOnce() async {
       if (!_connected) return;
       try {
-        final resp = await http.get(Uri.parse(pollUrl)).timeout(const Duration(seconds: 8));
-        if (resp.statusCode != 200) {
-          if (strict) {
-            throw Exception('Sensor poll failed: HTTP ${resp.statusCode}');
-          }
-          return;
-        }
+        final resp = await http.get(Uri.parse(pollUrl)).timeout(const Duration(seconds: 10));
+        if (resp.statusCode != 200) return;
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final line = data['line']?.toString() ?? '';
-        if (line.isEmpty || line == _lastLine) return;
-        _lastLine = line;
+        if (line.isEmpty) return;
         onBytes(utf8.encode('$line\n'));
-      } catch (e) {
-        if (strict) rethrow;
+      } catch (_) {
+        // Ignore transient poll errors — connection stays open.
       }
     }
 
-    await pollOnce(strict: true);
-    _timer = Timer.periodic(const Duration(milliseconds: 150), (_) => pollOnce(strict: false));
+    // Do not block connect on the first poll (avoids TimeoutException on cold start).
+    unawaited(pollOnce());
+    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => pollOnce());
   }
 
   @override
@@ -66,7 +59,6 @@ class CloudPollWifiSensorTransport implements WifiSensorTransport {
     _connected = false;
     _timer?.cancel();
     _timer = null;
-    _lastLine = null;
   }
 }
 

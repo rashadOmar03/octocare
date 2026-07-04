@@ -316,6 +316,21 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
     if (!_isConnected) return;
 
     _sensorAttached = reading.attached;
+    if (!_isMeasuring) {
+      _scheduleUiRefresh();
+      return;
+    }
+
+    if (!reading.attached) {
+      _heartRate = null;
+      _temperature = null;
+      _gsr = null;
+      _ecg = null;
+      _emg = null;
+      _scheduleUiRefresh();
+      return;
+    }
+
     if (reading.heartRate != null) {
       _heartRate = reading.heartRate;
       if (_isMeasuring && reading.heartRate! > 0) {
@@ -359,6 +374,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
       _gsr = null;
       _ecg = null;
       _emg = null;
+      _ecgSamples.clear();
       _emgSamples.clear();
       _gsrSamples.clear();
       _bpmSamples.clear();
@@ -368,7 +384,9 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
   }
 
   void _stopMeasuring() {
+    if (!_isConnected) return;
     setState(() => _isMeasuring = false);
+    _flushUiRefresh();
   }
 
   Future<void> _saveReadings() async {
