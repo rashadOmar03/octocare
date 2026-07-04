@@ -789,6 +789,12 @@ class ReceptionistDashboard(BaseModel):
     today_revenue: float
 
 
+class ReceptionistRevenueSummary(BaseModel):
+    net_revenue: float
+    paid_total: float = 0
+    refunded_total: float = 0
+
+
 class ReceptionistClinicInfo(BaseModel):
     default_fee: float
     appointment_duration: int

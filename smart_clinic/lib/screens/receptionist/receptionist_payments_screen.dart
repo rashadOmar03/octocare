@@ -26,7 +26,7 @@ class _ReceptionistPaymentsScreenState extends State<ReceptionistPaymentsScreen>
   final _receptionistService = ReceptionistService();
   List<Payment> _payments = [];
   bool _isLoading = true;
-  double _todayCollected = 0;
+  double _displayRevenue = 0;
   double _consultationFee = 100;
   String? _loadError;
   String? _statusFilter;
@@ -75,9 +75,10 @@ class _ReceptionistPaymentsScreenState extends State<ReceptionistPaymentsScreen>
     });
     try {
       final clinic = await _receptionistService.getClinicInfo();
-      final dashboard = await _receptionistService.getDashboard();
       _consultationFee = clinic.defaultFee;
-      _todayCollected = dashboard.todayRevenue;
+      _displayRevenue = await _receptionistService.getRevenueSummary(
+        date: _todayOnly ? _todayStr : null,
+      );
       var endpoint = '/receptionist/payments';
       final params = <String>[];
       if (_todayOnly) params.add('date=$_todayStr');
@@ -480,9 +481,12 @@ class _ReceptionistPaymentsScreenState extends State<ReceptionistPaymentsScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(AppLocalizations.tr('today_revenue'), style: Theme.of(context).textTheme.bodySmall),
                                 Text(
-                                  '${_todayCollected.toStringAsFixed(0)} ${AppLocalizations.tr('egp')}',
+                                  AppLocalizations.tr(_todayOnly ? 'today_revenue' : 'total_revenue'),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                Text(
+                                  '${_displayRevenue.toStringAsFixed(0)} ${AppLocalizations.tr('egp')}',
                                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                         color: const Color(0xFF388E3C),
                                         fontWeight: FontWeight.bold,

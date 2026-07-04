@@ -15,6 +15,7 @@ from schemas import (
     ReceptionistDashboard, ReceptionistPatientCreate, ReceptionistClinicInfo,
     ReceptionistBookAppointment, ReceptionistPatientSearchResult,
     PaymentCreate, PaymentResponse, InstapayPaymentCreate, RefundPaymentCreate,
+    ReceptionistRevenueSummary,
 )
 from auth import hash_password, require_role
 from appointment_rules import (
@@ -287,6 +288,34 @@ def receptionist_dashboard(
         completed_appointments=completed,
         arrived_appointments=arrived,
         today_revenue=float(today_revenue),
+    )
+
+
+@router.get("/revenue-summary", response_model=ReceptionistRevenueSummary)
+def revenue_summary(
+    date_filter: date = Query(None, alias="date"),
+    current_user: User = Depends(require_role("receptionist", "admin")),
+    db: Session = Depends(get_db),
+):
+    paid_query = db.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(
+        Payment.payment_status == "paid"
+    )
+    refunded_query = db.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(
+        Payment.payment_status == "refunded"
+    )
+    if date_filter:
+        paid_query = paid_query.join(Appointment, Appointment.id == Payment.appointment_id).filter(
+            Appointment.date == date_filter
+        )
+        refunded_query = refunded_query.join(Appointment, Appointment.id == Payment.appointment_id).filter(
+            Appointment.date == date_filter
+        )
+    paid_total = float(paid_query.scalar())
+    refunded_total = float(refunded_query.scalar())
+    return ReceptionistRevenueSummary(
+        net_revenue=paid_total - refunded_total,
+        paid_total=paid_total,
+        refunded_total=refunded_total,
     )
 
 

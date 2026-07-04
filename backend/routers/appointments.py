@@ -919,14 +919,6 @@ def receptionist_reschedule(
     was_cancelled = appointment.status == "cancelled"
     was_arrived = appointment.status == "arrived"
 
-    if _appointment_is_paid(db, appointment_id) and appointment.status in ("confirmed", "arrived"):
-        payment = db.query(Payment).filter(Payment.appointment_id == appointment_id).first()
-        if payment and payment.payment_status == "paid":
-            raise HTTPException(
-                status_code=400,
-                detail="This appointment is paid. Refund the payment first, then reschedule.",
-            )
-
     if data.date < date.today():
         raise HTTPException(status_code=400, detail="Cannot reschedule to a past date")
 

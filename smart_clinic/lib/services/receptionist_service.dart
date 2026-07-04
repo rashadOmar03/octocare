@@ -81,6 +81,16 @@ class ReceptionistService {
     return ReceptionistClinicInfo.fromJson(Map<String, dynamic>.from(response));
   }
 
+  Future<double> getRevenueSummary({String? date}) async {
+    var endpoint = '/receptionist/revenue-summary';
+    if (date != null && date.isNotEmpty) {
+      endpoint += '?date=$date';
+    }
+    final response = await _api.get(endpoint);
+    final map = Map<String, dynamic>.from(response);
+    return (map['net_revenue'] as num?)?.toDouble() ?? 0;
+  }
+
   Future<List<PatientSearchResult>> searchPatients(String query) async {
     if (query.trim().isEmpty) return [];
     final response = await _api.get('/receptionist/patients/search?q=${Uri.encodeQueryComponent(query.trim())}');

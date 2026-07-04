@@ -385,6 +385,7 @@ class AppStringsEn {
     'search_patient_hint': 'Name, email, or phone',
     'reception_same_day_note': 'Reception can book same-day appointments. Patients must book at least one day ahead.',
     'today_revenue': "Today's revenue",
+    'total_revenue': 'Total revenue',
     'collect_payment_again': 'Payment refunded — collect again',
     'refund_then_cancel': 'Refund the payment from Payments first, then cancel this appointment.',
     'welcome_email_failed': 'Welcome email could not be sent. Share the temp password manually.',
