@@ -8,6 +8,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 ICON_MASTER = ROOT / "assets" / "branding" / "octocare_app_icon.png"
+MARK_MASTER = ROOT / "assets" / "branding" / "octocare_mark.png"
 LOGO_MASTER = ROOT / "assets" / "branding" / "octocare_logo.png"
 FLUTTER = ROOT / "smart_clinic"
 
@@ -97,11 +98,11 @@ def main() -> None:
 
     app_assets = FLUTTER / "assets" / "images"
     save_square(icon, 512, app_assets / "app_icon.png")
-    logo = Image.open(LOGO_MASTER).convert("RGBA")
-    logo.save(app_assets / "octocare_logo.png", format="PNG", optimize=True)
-    print(f"Wrote {app_assets / 'octocare_logo.png'}")
+    mark = Image.open(MARK_MASTER).convert("RGBA")
+    mark.save(app_assets / "octocare_mark.png", format="PNG", optimize=True)
+    print(f"Wrote {app_assets / 'octocare_mark.png'}")
 
-    splash_source = logo.copy()
+    splash_source = mark.copy()
     for filename, size in IOS_SPLASH_SIZES.items():
         canvas = Image.new("RGBA", (size, size), (255, 255, 255, 255))
         inner = int(size * 0.72)
