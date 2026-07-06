@@ -17,7 +17,10 @@ RULES:
 - Do NOT copy long paragraphs into SOAP sections. Summarize professionally like a hospital EHR.
 - Extract EVERY POSITIVE symptom mentioned, including implied/clinical terms (synonyms, abbreviations expanded).
 - CRITICAL — NEGATION HANDLING: Words like "no", "denies", "negative", "without", "absent", "ruled out", "لا", "مفيش", "بدون" NEGATE the symptom that follows. NEVER add negated symptoms to the symptoms array. Examples: "no fever" → do NOT add fever; "denies cough" → do NOT add cough; "no vomiting" → do NOT add vomiting. Only list them as pertinent negatives in objective if clinically useful.
-- Deduplicate and normalize entities (e.g. HF, heart failure, CHF → one diagnosis entry).
+- Do NOT infer diagnoses from symptoms, medications, tests ordered, or family history. Only include diagnoses explicitly documented by the clinician (including suspected/possible/rule-out with certainty preserved).
+- Tag family history separately in medical_history.family_history — never as patient diagnoses or symptoms.
+- Mark old/previous records and prior medication lists as historical — do not place them in current medications.
+- Do NOT extract vital signs from the note text into vital_signs (vitals come from clinic sensors).
 - Separate medications into prescription (new/current orders) vs plan (non-drug actions).
 - Plan must NOT contain medications — put all drugs in prescription array OR medications_current based on context.
 - Use null or [] for missing fields.
@@ -26,7 +29,8 @@ MEDICATION EXTRACTION (CRITICAL):
 - Understand medications from full context — NOT keyword matching. Works for Arabic, English, mixed, formal notes, dialogue, and messy text.
 - For EVERY medication, infer and populate:
   • name (normalized generic name when possible)
-  • action: one of Start | Continue | Stop | Hold | Increase | Decrease | Administered
+  • action: one of START | CONTINUE | HOLD | STOP | ONE_TIME | CONDITIONAL | UNKNOWN
+  • If action is unclear, use UNKNOWN — never assume Continue.
   • dosage, frequency, route, duration, notes/instructions when available
 - Classify automatically:
   • medications_current = home/chronic meds patient already takes (action usually Continue)
@@ -88,9 +92,9 @@ JSON SCHEMA (exact keys):
   "echocardiogram": [str],
   "doctor_notes": [str],
   "follow_up": str|null,
-  "medications_current": [{"name": str, "action": str|null, "dosage": str|null, "frequency": str|null, "route": str|null, "duration": str|null, "notes": str|null}],
+  "medications_current": [{"name": str, "action": str|null, "dosage": str|null, "frequency": str|null, "route": str|null, "duration": str|null, "notes": str|null, "temporality": str|null, "source_evidence": str|null}],
   "medications_discontinued": [str],
-  "prescription": [{"name": str, "action": str|null, "dosage": str|null, "frequency": str|null, "route": str|null, "duration": str|null, "notes": str|null}],
+  "prescription": [{"name": str, "action": str|null, "dosage": str|null, "frequency": str|null, "route": str|null, "duration": str|null, "notes": str|null, "temporality": str|null, "source_evidence": str|null}],
   "soap_note": {
     "subjective": str,
     "objective": {
@@ -377,7 +381,7 @@ def _normalize_med_action(raw: Any) -> str | None:
     return None
 
 
-def _normalize_medication_item(item: Any, default_action: str = "Continue") -> dict[str, Any] | None:
+def _normalize_medication_item(item: Any, default_action: str = "UNKNOWN") -> dict[str, Any] | None:
     if isinstance(item, str):
         name = item.strip()
         if not name:
@@ -396,7 +400,13 @@ def _normalize_medication_item(item: Any, default_action: str = "Continue") -> d
     name = (item.get("name") or item.get("medication_name") or "").strip()
     if not name:
         return None
-    action = _normalize_med_action(item.get("action")) or default_action
+    action = _normalize_med_action(item.get("action"))
+    if action is None:
+        action = default_action if default_action != "UNKNOWN" else "UNKNOWN"
+    else:
+        # Map legacy actions to canonical uppercase
+        from extraction_schema import canonical_med_action
+        action = canonical_med_action(action).value
     return {
         "name": name,
         "action": action,
@@ -408,20 +418,14 @@ def _normalize_medication_item(item: Any, default_action: str = "Continue") -> d
     }
 
 
-def _normalize_medications_list(raw: Any, default_action: str = "Continue") -> list[dict[str, Any]]:
+def _normalize_medications_list(raw: Any, default_action: str = "UNKNOWN") -> list[dict[str, Any]]:
     if not isinstance(raw, list):
         return []
-    seen: set[str] = set()
     out: list[dict[str, Any]] = []
     for item in raw:
         med = _normalize_medication_item(item, default_action=default_action)
-        if not med:
-            continue
-        key = _norm_key(med["name"])
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(med)
+        if med:
+            out.append(med)
     return out
 
 
@@ -431,8 +435,10 @@ def _medication_signature(med: dict[str, Any]) -> str:
 
 def _split_and_classify_medications(data: dict[str, Any]) -> dict[str, Any]:
     """Route medications to current vs prescription vs discontinued by semantic action."""
-    current_raw = _normalize_medications_list(data.get("medications_current"), default_action="Continue")
-    rx_raw = _normalize_medications_list(data.get("prescription"), default_action="Start")
+    from extraction_schema import MedAction, canonical_med_action
+
+    current_raw = _normalize_medications_list(data.get("medications_current"), default_action="UNKNOWN")
+    rx_raw = _normalize_medications_list(data.get("prescription"), default_action="UNKNOWN")
     discontinued = _dedupe_strings([str(x).strip() for x in _as_str_list(data.get("medications_discontinued"))])
 
     merged: list[tuple[dict[str, Any], str]] = []
@@ -446,13 +452,14 @@ def _split_and_classify_medications(data: dict[str, Any]) -> dict[str, Any]:
     stop_names: list[str] = list(discontinued)
 
     for med, source in merged:
-        action = med.get("action") or "Continue"
-        if action in _STOP_ACTIONS:
+        action = canonical_med_action(med.get("action"))
+        med = {**med, "action": action.value}
+        if action in (MedAction.STOP, MedAction.HOLD):
             stop_names.append(med["name"])
             continue
-        if action in _NEW_RX_ACTIONS:
+        if action in (MedAction.START, MedAction.ONE_TIME, MedAction.CONDITIONAL):
             prescription.append(med)
-        elif action == "Continue":
+        elif action == MedAction.CONTINUE:
             if source == "rx":
                 prescription.append(med)
             else:
@@ -460,9 +467,11 @@ def _split_and_classify_medications(data: dict[str, Any]) -> dict[str, Any]:
         else:
             current.append(med)
 
-    # Deduplicate: if same drug in both lists, prefer prescription when action is Start/Increase/Decrease
     rx_keys = {_medication_signature(m) for m in prescription}
-    current = [m for m in current if _medication_signature(m) not in rx_keys or m.get("action") == "Continue"]
+    current = [
+        m for m in current
+        if _medication_signature(m) not in rx_keys or canonical_med_action(m.get("action")) == MedAction.CONTINUE
+    ]
 
     data["medications_current"] = current
     data["prescription"] = prescription
@@ -1034,18 +1043,13 @@ def _clean_subjective_section(data: dict[str, Any]) -> dict[str, Any]:
 
 def _refine_extraction(data: dict[str, Any]) -> dict[str, Any]:
     """Post-process normalized extraction for EHR-quality output."""
-    data = _split_and_classify_medications(data)
     data = _ensure_medical_history(data)
     data = _clean_subjective_section(data)
     data = _organize_objective_sections(data)
     data = _ensure_follow_up(data)
     data = _dedupe_plan_section(data)
     data = _dedupe_cross_sections(data)
-    data["severity"] = _infer_severity(data)
-    if not (data.get("clinical_summary") or "").strip():
-        data["clinical_summary"] = _build_clinical_summary(data)
-    if not data.get("clinical_findings"):
-        data["clinical_findings"] = _build_clinical_findings(data)
+    # Severity/summary finalized in extraction_pipeline after validation
     return data
 
 
@@ -1156,12 +1160,16 @@ def normalize_extraction(raw: dict[str, Any], source_text: str | None = None) ->
     data = _ensure_soap_sections(data)
     data = _refine_extraction(data)
     if source_text:
-        from transcript_enrichment import enrich_from_transcript
-        data = enrich_from_transcript(data, source_text)
+        from transcript_enrichment import safe_enrich_from_transcript
+        data = safe_enrich_from_transcript(data, source_text)
         data = _dedupe_cross_sections(data)
         soap = data.get("soap_note") or {}
         if not (soap.get("subjective") or "").strip() or _subjective_contains_history(soap.get("subjective", "")):
             data = _clean_subjective_section(data)
+    from extraction_pipeline import run_extraction_pipeline
+    data, validation = run_extraction_pipeline(data, source_text)
+    if not data.get("clinical_findings"):
+        data["clinical_findings"] = _build_clinical_findings(data)
     return data
 
 
@@ -1280,7 +1288,9 @@ def build_api_response(extracted: dict[str, Any], source: str, source_text: str 
         "symptoms_list": data.get("symptoms", []),
         "diagnosis": _numbered_list(diagnoses),
         "diagnoses": diagnoses,
-        "severity": data.get("severity") or "unknown",
+        "severity": data.get("severity") or "undetermined",
+        "validation_report": data.get("validation_report") or {},
+        "vitals_source": data.get("vitals_source") or "sensor",
         "treatment_plan": _list_to_bullets(plan_items),
         "plan_list": plan_items,
         "prescription": data.get("prescription") or [],

@@ -94,7 +94,7 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
     _prescription = _normalizePrescription(widget.prescription ?? _structured['prescription']);
     _currentMedications = _normalizePrescription(
       widget.currentMedications ?? _structured['medications_current'],
-      defaultAction: 'Continue',
+      defaultAction: 'UNKNOWN',
     );
     _symptoms = _normalizeSymptoms(widget.symptomsList ?? _structured['symptoms']);
 
@@ -993,6 +993,16 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
     }
 
     if (cards.isEmpty) {
+      final vitalsSource = (_structured['vitals_source'] ?? 'sensor').toString();
+      if (vitalsSource == 'sensor') {
+        return Text(
+          AppLocalizations.tr('sensor_off_patient'),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+        );
+      }
       return Text(widget.objectiveController?.text.trim().isNotEmpty == true ? widget.objectiveController!.text : '—');
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: cards);
@@ -1089,7 +1099,7 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
       context,
       AppLocalizations.tr('current_medications'),
       widget.editable
-          ? _medicationEditableList(_currentMedications, defaultAction: 'Continue', onChanged: _notifyParent)
+          ? _medicationEditableList(_currentMedications, defaultAction: 'UNKNOWN', onChanged: _notifyParent)
           : _medicationReadTable(_currentMedications),
     );
   }

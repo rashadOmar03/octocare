@@ -5,13 +5,15 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from extraction_schema import Temporality
 from medical_extraction import (
     _as_str_list,
     _dedupe_strings,
+    _filter_negated_symptoms,
     _localized,
     _norm_key,
-    _normalize_medication_item,
     _output_lang,
+    _symptom_is_negated,
     normalize_symptoms,
 )
 
@@ -180,10 +182,12 @@ def _apply_label(template: str, match: re.Match[str] | None) -> str:
     return value
 
 
-def enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[str, Any]:
-    """Supplement extraction from transcript patterns (Arabic/English/mixed)."""
+def safe_enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[str, Any]:
+    """Safe gap-fill: PMH/allergies/plan only. No diagnosis inference, no hardcoded drug lists."""
     if not (transcript or "").strip():
         return data
+
+    from medical_extraction import _filter_negated_symptoms, _symptom_is_negated
 
     lang = _output_lang(data)
     text = transcript
@@ -196,7 +200,13 @@ def enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[str, A
         if not m:
             continue
         label = _apply_label(_localized(lang, en_label, ar_label), m)
-        _append_unique(pmh, label)
+        ctx = _snippet(text, m.start(), m.end())
+        if _detect_temporality(ctx) == Temporality.FAMILY_HISTORY:
+            fh = _as_str_list(mh.get("family_history"))
+            _append_unique(fh, label)
+            mh["family_history"] = _dedupe_strings(fh)
+        else:
+            _append_unique(pmh, label)
 
     for pattern, ar_label, en_label in _ALLERGY_PATTERNS:
         if not re.search(pattern, text, re.I):
@@ -211,91 +221,91 @@ def enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[str, A
     data["medical_history"] = mh
 
     for pattern, ar_name, en_name, ar_dur, en_dur in _SYMPTOM_RULES:
-        if re.search(pattern, text, re.I):
-            name = _localized(lang, en_name, ar_name)
-            duration = None
-            if ar_dur or en_dur:
-                duration = _localized(lang, en_dur or "", ar_dur or "") or None
-            _append_symptom(data, name, duration)
+        m = re.search(pattern, text, re.I)
+        if not m:
+            continue
+        name = _localized(lang, en_name, ar_name)
+        if _symptom_is_negated(name, text):
+            continue
+        ctx = _snippet(text, m.start(), m.end())
+        if _detect_temporality(ctx) == Temporality.FAMILY_HISTORY:
+            continue
+        duration = _localized(lang, en_dur or "", ar_dur or "") or None if (ar_dur or en_dur) else None
+        _append_symptom(data, name, duration)
 
     data["symptoms"] = normalize_symptoms(data.get("symptoms", []))
+    if source_text := text:
+        data["symptoms"] = _filter_negated_symptoms(data.get("symptoms") or [], source_text)
 
     if not (data.get("chief_complaint") or "").strip():
         names = _symptom_names(data)
         if names:
             data["chief_complaint"] = names[0]
 
-    diagnoses = _as_str_list(data.get("diagnoses"))
-    blob = _norm_key(text + " " + " ".join(pmh) + " " + " ".join(_symptom_names(data)))
-
-    if re.search(r"ACS|acute coronary|NSTEMI|STEMI|شريان\s*تاج", text, re.I):
-        _append_unique(diagnoses, _localized(lang, "Possible acute coronary syndrome", "احتمال متلازمة الشريان التاجي الحاد"))
-    if re.search(r"heart failure|فشل\s*قلب|قصور\s*قلب|decompensated\s*HF", text, re.I):
-        _append_unique(diagnoses, _localized(lang, "Possible heart failure", "احتمال فشل قلبي"))
-    if _has_item(pmh, "ضغط") or _has_item(pmh, "hypertension") or re.search(r"ضغط|htn|hypertension", text, re.I):
-        _append_unique(diagnoses, _localized(lang, "Hypertension", "ارتفاع ضغط الدم"))
-    if _has_item(pmh, "سكر") or _has_item(pmh, "diabetes") or re.search(r"سكر|diabetes|dm\b|t2dm", text, re.I):
-        _append_unique(diagnoses, _localized(lang, "Diabetes mellitus", "داء السكري"))
-    if re.search(r"pneumonia|التهاب\s*رئوي|community acquired", text, re.I):
-        _append_unique(diagnoses, _localized(lang, "Pneumonia", "التهاب رئوي"))
-    if re.search(r"major depression|depression|اكتئاب", text, re.I):
-        _append_unique(diagnoses, _localized(lang, "Major depression", "اكتئاب"))
-    if re.search(r"viral uri|upper respiratory|URI\b|برد\s*فيروس", text, re.I):
-        _append_unique(diagnoses, _localized(lang, "Viral upper respiratory infection", "التهاب تنفسي فيروسي"))
-
-    for symptom_keys, ar_dx, en_dx in _DX_INFERENCE:
-        if any(k.lower() in blob or k in blob for k in symptom_keys):
-            _append_unique(diagnoses, _localized(lang, en_dx, ar_dx))
-
-    data["diagnoses"] = _dedupe_strings(diagnoses)
-    pending = {_norm_key(x) for x in (
-        "بانتظار مراجعة الطبيب", "pending physician review", "pending clinical assessment",
-    )}
-    if len(data["diagnoses"]) > 1:
-        data["diagnoses"] = [d for d in data["diagnoses"] if _norm_key(str(d)) not in pending]
-
     soap = data.get("soap_note") or {}
-    assessment = _as_str_list(soap.get("assessment"))
-    if not assessment and diagnoses:
-        soap["assessment"] = list(diagnoses)
-    data["soap_note"] = soap
-
-    for pattern, ar_finding, en_finding in _EXAM_PATTERNS:
-        if re.search(pattern, text, re.I):
-            _append_objective(data, "physical_exam", _localized(lang, en_finding, ar_finding))
-
-    plan = _as_str_list((data.get("soap_note") or {}).get("plan"))
+    plan = _as_str_list(soap.get("plan"))
     follow = _as_str_list(data.get("follow_up_items"))
     for pattern, ar_item, en_item in _PLAN_PATTERNS:
-        if re.search(pattern, text, re.I):
-            item = _localized(lang, en_item, ar_item)
-            _append_unique(plan, item)
+        m = re.search(pattern, text, re.I)
+        if not m:
+            continue
+        item = _localized(lang, en_item, ar_item)
+        if _detect_temporality(_snippet(text, m.start(), m.end())) == Temporality.PLANNED:
             _append_unique(follow, item)
+        else:
+            _append_unique(plan, item)
+
+    for pattern, ar_finding, en_finding in _EXAM_PATTERNS:
+        m = re.search(pattern, text, re.I)
+        if m and not _is_negated_near(text, m.start(), m.end()):
+            _append_objective(data, "physical_exam", _localized(lang, en_finding, ar_finding))
 
     if isinstance(data.get("soap_note"), dict):
         data["soap_note"]["plan"] = _dedupe_strings(plan)
     data["follow_up_items"] = _dedupe_strings(follow)
     data["follow_up"] = "; ".join(follow) if follow else data.get("follow_up")
-
-    for pattern, drug, action, dose_pat in _RX_PATTERNS:
-        if re.search(pattern, text, re.I):
-            dose = None
-            if dose_pat:
-                dm = re.search(dose_pat, text, re.I)
-                if dm and dm.lastindex:
-                    dose = dm.group(1)
-            med = _normalize_medication_item({
-                "name": drug,
-                "action": action,
-                "dosage": dose or "—",
-                "frequency": "daily" if action == "Start" else None,
-            }, default_action=action)
-            if med:
-                key = "prescription" if action in ("Start", "Increase", "Decrease", "Administered") else "medications_current"
-                _append_medication(data, key, med)
-
-    if not data.get("severity") or data.get("severity") == "unknown":
-        if re.search(r"severe|شديد|critical|حرج|ACS|admit|stat", text, re.I):
-            data["severity"] = "moderate"
-
     return data
+
+
+_ENRICH_NEGATION = re.compile(
+    r"(?:no|not|denies|without|لا |ما |مفيش|بدون|عدم|لا\s*يوجد)",
+    re.IGNORECASE,
+)
+_ENRICH_HISTORICAL = re.compile(
+    r"(?:past|previous|old|former|history of|سابق|قديم|من\s*زمان|previous\s+visit|old\s+record)",
+    re.IGNORECASE,
+)
+_ENRICH_FAMILY = re.compile(
+    r"(?:family\s+history|f/h|father|mother|brother|sister|الأب|الأم|العائلة)",
+    re.IGNORECASE,
+)
+_ENRICH_PLANNED = re.compile(
+    r"(?:will|plan to|schedule|follow[- ]?up|order|طلب|متابعة|تنويم)",
+    re.IGNORECASE,
+)
+
+
+def _snippet(text: str, start: int, end: int, radius: int = 40) -> str:
+    a = max(0, start - radius)
+    b = min(len(text), end + radius)
+    return text[a:b]
+
+
+def _is_negated_near(text: str, start: int, end: int) -> bool:
+    window_before = text[max(0, start - 50):start]
+    return bool(_ENRICH_NEGATION.search(window_before))
+
+
+def _detect_temporality(context: str) -> Temporality:
+    if _ENRICH_FAMILY.search(context):
+        return Temporality.FAMILY_HISTORY
+    if _ENRICH_HISTORICAL.search(context):
+        return Temporality.HISTORICAL
+    if _ENRICH_PLANNED.search(context):
+        return Temporality.PLANNED
+    return Temporality.CURRENT
+
+
+# Backward-compatible alias — routes to safe enrichment
+def enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[str, Any]:
+    return safe_enrich_from_transcript(data, transcript)
