@@ -89,17 +89,14 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   }
 
   String _consultationStatusSubtitle(Appointment a) {
-    if (a.status == 'arrived' && !a.isPaid) {
+    if (!a.isPaid && (a.status == 'arrived' || a.status == 'confirmed' || a.status == 'pending')) {
       return AppLocalizations.tr('payment_required_consultation');
-    }
-    if (a.status == 'confirmed') {
-      return AppLocalizations.tr('arrived_required_consultation');
     }
     return AppLocalizations.tr(a.status ?? '');
   }
 
   Widget _consultationTrailing(Appointment a) {
-    if (a.isConsultationEditable) {
+    if (a.canDoctorStartConsultation) {
       return ElevatedButton(
         onPressed: () async {
           final changed = await openDoctorConsultation(context, a);
@@ -285,7 +282,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                                   : TimeFormat.format24To12(a.timeSlot),
                             ),
                             trailing: _consultationTrailing(a),
-                            onTap: (a.isConsultationEditable || a.isConsultationEditOnly)
+                            onTap: (a.canDoctorStartConsultation || a.isConsultationEditOnly)
                                 ? () async {
                                     final changed = await openDoctorConsultation(context, a);
                                     if (changed == true && mounted) _loadData();

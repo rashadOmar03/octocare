@@ -40,6 +40,8 @@ class Appointment {
   });
 
   bool get isConsultationEditable => status == 'arrived' && isPaid;
+  bool get canDoctorStartConsultation =>
+      isPaid && (status == 'arrived' || status == 'confirmed' || status == 'pending');
   bool get isConsultationEditOnly => status == 'completed' && (hasConsultation || medicalRecordId != null);
 
   bool get isToday {

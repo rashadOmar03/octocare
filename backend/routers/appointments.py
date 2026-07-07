@@ -843,15 +843,20 @@ def complete_appointment(
     return _enrich_appointment(appointment, db)
 
 
-@router.put("/{appointment_id}/arrive")
-def mark_arrived(
-    appointment_id: str,
-    current_user: User = Depends(require_role("receptionist", "admin")),
-    db: Session = Depends(get_db),
-):
-    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+def _apply_arrived_status(
+    db: Session,
+    appointment: Appointment,
+    *,
+    actor_user_id: str,
+    audit_action: str = "mark_arrived",
+    notify_doctor: bool = True,
+) -> None:
+    """Move a paid appointment into today's waiting queue."""
+    if appointment.status == "arrived":
+        return
+
+    if appointment.status == "pending":
+        appointment.status = "confirmed"
 
     if appointment.status != "confirmed":
         raise HTTPException(
@@ -859,7 +864,7 @@ def mark_arrived(
             detail="Only confirmed appointments can be added to the waiting queue",
         )
 
-    if not _appointment_is_paid(db, appointment_id):
+    if not _appointment_is_paid(db, appointment.id):
         raise HTTPException(
             status_code=400,
             detail="Patient must complete payment before marking as arrived.",
@@ -888,28 +893,89 @@ def mark_arrived(
     appointment.status = "arrived"
 
     patient_name = _get_patient_name(db, appointment.patient_id)
-
     log_audit(
         db,
-        current_user.id,
-        "mark_arrived",
+        actor_user_id,
+        audit_action,
         "appointment",
-        appointment_id,
+        appointment.id,
         f"{patient_name} arrived — queue #{appointment.queue_number} on {appointment.date} {appointment.time_slot}",
     )
 
-    doctor = db.query(Doctor).filter(Doctor.id == appointment.doctor_id).first()
-    if doctor:
-        doc_user = db.query(User).join(Profile).filter(Profile.id == doctor.profile_id).first()
-        if doc_user:
-            db.add(Notification(
-                id=str(uuid.uuid4()),
-                user_id=doc_user.id,
-                title="Patient Arrived",
-                message=f"{patient_name} has arrived (Queue #{appointment.queue_number}). Appointment at {appointment.time_slot}.",
-            ))
+    if notify_doctor:
+        doctor = db.query(Doctor).filter(Doctor.id == appointment.doctor_id).first()
+        if doctor:
+            doc_user = db.query(User).join(Profile).filter(Profile.id == doctor.profile_id).first()
+            if doc_user:
+                db.add(Notification(
+                    id=str(uuid.uuid4()),
+                    user_id=doc_user.id,
+                    title="Patient Arrived",
+                    message=(
+                        f"{patient_name} has arrived (Queue #{appointment.queue_number}). "
+                        f"Appointment at {appointment.time_slot}."
+                    ),
+                ))
 
     _notify_patient_queue(db, appointment, appointment.queue_number)
+
+
+@router.put("/{appointment_id}/arrive")
+def mark_arrived(
+    appointment_id: str,
+    current_user: User = Depends(require_role("receptionist", "admin")),
+    db: Session = Depends(get_db),
+):
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    _apply_arrived_status(
+        db,
+        appointment,
+        actor_user_id=current_user.id,
+        audit_action="mark_arrived",
+        notify_doctor=True,
+    )
+
+    db.commit()
+    db.refresh(appointment)
+    return _enrich_appointment(appointment, db)
+
+
+@router.put("/{appointment_id}/start-consultation")
+def start_consultation(
+    appointment_id: str,
+    current_user: User = Depends(require_role("doctor")),
+    db: Session = Depends(get_db),
+):
+    """Doctor starts consultation: auto check-in paid patients if not already arrived."""
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    assert_appointment_doctor_action(current_user, appointment, db)
+
+    if appointment.status in ("completed", "cancelled"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot start consultation for a {appointment.status} appointment.",
+        )
+
+    if appointment.status == "arrived":
+        if not _appointment_is_paid(db, appointment_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Patient must complete payment before consultation.",
+            )
+    else:
+        _apply_arrived_status(
+            db,
+            appointment,
+            actor_user_id=current_user.id,
+            audit_action="start_consultation",
+            notify_doctor=False,
+        )
 
     db.commit()
     db.refresh(appointment)

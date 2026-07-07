@@ -206,7 +206,7 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen> wit
             appointment: apt,
             showPatient: true,
             showDoctor: false,
-            onTap: apt.isConsultationEditable || apt.status == 'completed'
+            onTap: apt.canDoctorStartConsultation || apt.isConsultationEditOnly || apt.status == 'completed'
                 ? () async {
                     final changed = await openDoctorConsultation(context, apt);
                     if (changed == true && mounted) _loadData();

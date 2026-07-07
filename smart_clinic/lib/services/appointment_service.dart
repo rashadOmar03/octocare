@@ -41,6 +41,11 @@ class AppointmentService {
     await _api.put('/appointments/$id/arrive', {});
   }
 
+  Future<Appointment> startConsultation(String id) async {
+    final response = await _api.put('/appointments/$id/start-consultation', {});
+    return Appointment.fromJson(Map<String, dynamic>.from(response));
+  }
+
   Future<void> leaveQueue(String id) async {
     await _api.put('/appointments/$id/leave-queue', {});
   }

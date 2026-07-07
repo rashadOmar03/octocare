@@ -187,6 +187,8 @@ def _save_payment_record(
     apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not apt:
         raise HTTPException(status_code=404, detail="Appointment not found")
+    if apt.status == "pending":
+        apt.status = "confirmed"
     amount = _default_fee(db, apt.doctor_id)
     rec_profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
 
