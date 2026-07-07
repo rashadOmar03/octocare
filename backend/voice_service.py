@@ -8,10 +8,15 @@ Supports two Whisper backends:
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
+import shutil
+import subprocess
 import tempfile
 from typing import Literal
+
+logger = logging.getLogger(__name__)
 
 ModelSize = Literal["small", "medium"]
 
@@ -33,6 +38,23 @@ _WHISPER_HALLUCINATIONS = frozenset({
     "subscribe", "bye", "bye bye", "the end",
     "...", "mm", "hmm", "uh", "um", "okay", "ok",
 })
+
+# Arabic subtitle/translation hallucinations on unclear or silent audio.
+_ARABIC_HALLUCINATION_MARKERS = (
+    "ترجمة نانسي",
+    "ترجمة نانسي قطر",
+    "ترجمة آلاء",
+    "ترجمة أمازون",
+    "ترجمة أم",
+    "اشترك في القناة",
+    "لا تنسى الاشتراك",
+    "شكرا للمشاهدة",
+    "شكراً للمشاهدة",
+    "شكرا على المشاهدة",
+    "موسيقى",
+    "موسيقي",
+    "ترجمة آل",
+)
 
 # Random English phrases Whisper invents on Arabic/silent audio — always reject.
 _WHISPER_ENGLISH_GARBAGE = frozenset({
@@ -86,6 +108,90 @@ def _normalize_for_echo_check(text: str) -> str:
     return re.sub(r"\s+", " ", lowered).strip()
 
 
+def _is_arabic_hallucination(transcript: str) -> bool:
+    """Reject common Arabic subtitle/translation garbage from Whisper."""
+    cleaned = (transcript or "").strip()
+    if not cleaned or not _contains_arabic(cleaned):
+        return False
+    norm = re.sub(r"\s+", " ", cleaned).strip()
+    lowered = norm.lower()
+    for marker in _ARABIC_HALLUCINATION_MARKERS:
+        if marker in norm or marker in lowered:
+            return True
+    if norm.startswith("ترجمة") and len(norm) < 80:
+        return True
+    if "ترجمة" in norm and len(norm.split()) <= 5:
+        return True
+    return False
+
+
+def _whisper_segments_trustworthy(body: dict, *, audio_bytes: bytes | int) -> bool:
+    """Use Whisper segment stats to reject low-confidence hallucinations."""
+    segments = body.get("segments") or []
+    if not segments:
+        return True
+
+    size = audio_bytes if isinstance(audio_bytes, int) else len(audio_bytes)
+    for seg in segments:
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        no_speech = float(seg.get("no_speech_prob") or 0.0)
+        avg_logprob = float(seg.get("avg_logprob") or 0.0)
+        compression = float(seg.get("compression_ratio") or 0.0)
+
+        if no_speech > 0.75 and size < 12000:
+            return False
+        if avg_logprob < -1.15 and size < 16000:
+            return False
+        if compression > 2.4:
+            return False
+    return True
+
+
+def _normalize_audio_for_whisper(audio_bytes: bytes, suffix: str) -> tuple[bytes, str]:
+    """Convert browser recordings to 16 kHz mono WAV when ffmpeg is available."""
+    if not shutil.which("ffmpeg") or len(audio_bytes) < 400:
+        return audio_bytes, suffix
+
+    inp_path = out_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix or ".webm", delete=False) as inp:
+            inp.write(audio_bytes)
+            inp_path = inp.name
+        out_path = f"{inp_path}.wav"
+        proc = subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", inp_path,
+                "-ar", "16000", "-ac", "1",
+                "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
+                "-c:a", "pcm_s16le",
+                out_path,
+            ],
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        if proc.returncode != 0 or not os.path.exists(out_path):
+            logger.warning("ffmpeg normalize failed: %s", (proc.stderr or b"")[:200])
+            return audio_bytes, suffix
+        with open(out_path, "rb") as f:
+            normalized = f.read()
+        if len(normalized) < 400:
+            return audio_bytes, suffix
+        return normalized, ".wav"
+    except Exception as exc:
+        logger.warning("audio normalize skipped: %s", exc)
+        return audio_bytes, suffix
+    finally:
+        for path in (inp_path, out_path):
+            if path:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
+
+
 def _is_prompt_echo(transcript: str) -> bool:
     norm = _normalize_for_echo_check(transcript)
     if not norm:
@@ -106,6 +212,8 @@ def _is_garbage_transcript(transcript: str, *, requested_lang: str | None, audio
         return True
 
     if _is_prompt_echo(cleaned):
+        return True
+    if _is_arabic_hallucination(cleaned):
         return True
 
     lowered = cleaned.lower().rstrip(".,!?")
@@ -198,14 +306,16 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
     if len(audio_bytes) < 400:
         return {"transcript": "", "language": language or "en", "model": f"groq-{GROQ_WHISPER_MODEL}"}
 
+    normalized_bytes, normalized_suffix = _normalize_audio_for_whisper(audio_bytes, suffix)
+
     def _call(lang: str | None) -> dict:
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(audio_bytes)
+        with tempfile.NamedTemporaryFile(suffix=normalized_suffix, delete=False) as tmp:
+            tmp.write(normalized_bytes)
             tmp_path = tmp.name
         try:
-            mime = _mime_for_suffix(suffix)
+            mime = _mime_for_suffix(normalized_suffix)
             with open(tmp_path, "rb") as f:
-                files = {"file": (f"audio{suffix}", f, mime)}
+                files = {"file": (f"audio{normalized_suffix}", f, mime)}
                 data: dict = {
                     "model": GROQ_WHISPER_MODEL,
                     "response_format": "verbose_json",
@@ -229,7 +339,9 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
             body = resp.json()
             transcript = (body.get("text") or "").strip()
             detected = _normalize_language(body.get("language"), fallback=lang or language or "en")
-            if _is_garbage_transcript(transcript, requested_lang=language, audio_bytes=audio_bytes):
+            if not _whisper_segments_trustworthy(body, audio_bytes=audio_bytes):
+                transcript = ""
+            elif _is_garbage_transcript(transcript, requested_lang=language, audio_bytes=audio_bytes):
                 transcript = ""
             return {
                 "transcript": transcript,

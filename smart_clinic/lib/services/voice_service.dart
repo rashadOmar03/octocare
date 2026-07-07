@@ -22,6 +22,28 @@ const _englishGarbagePhrases = {
   'medical clinic conversation',
 };
 
+const _arabicGarbagePhrases = {
+  'ترجمة نانسي قطر',
+  'ترجمة نانسي',
+  'ترجمة آلاء',
+  'ترجمة أمازون',
+  'اشترك في القناة',
+  'لا تنسى الاشتراك',
+  'شكرا للمشاهدة',
+  'شكراً للمشاهدة',
+  'موسيقى',
+};
+
+bool _isArabicHallucination(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty || !_arabicScript.hasMatch(trimmed)) return false;
+  for (final phrase in _arabicGarbagePhrases) {
+    if (trimmed.contains(phrase)) return true;
+  }
+  if (trimmed.startsWith('ترجمة') && trimmed.length < 80) return true;
+  return false;
+}
+
 bool _isPromptEcho(String text) {
   final norm = text.toLowerCase().replaceAll(RegExp(r'[^\w\s\u0600-\u06FF]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   for (final marker in _englishGarbagePhrases) {
@@ -87,9 +109,9 @@ class VoiceService {
     final startedAt = _recordingStartedAt;
     _recordingStartedAt = null;
     if (startedAt != null &&
-        DateTime.now().difference(startedAt).inMilliseconds < 800) {
+        DateTime.now().difference(startedAt).inMilliseconds < 1200) {
       await _platform.cancelRecording();
-      throw Exception('Hold the mic for at least 1 second while you speak, then tap stop.');
+      throw Exception('Hold the mic for at least 2 seconds while you speak, then tap stop.');
     }
 
     final bytes = await _platform.stopRecordingBytes();
@@ -120,6 +142,12 @@ class VoiceService {
     if (_isPromptEcho(transcript)) {
       throw Exception(
         'Voice was not recognized. Speak clearly for 2–3 seconds in Arabic or English, then tap stop.',
+      );
+    }
+
+    if (_isArabicHallucination(transcript)) {
+      throw Exception(
+        'Voice was not recognized. Speak clearly in Arabic for 2–3 seconds, then tap stop.',
       );
     }
 

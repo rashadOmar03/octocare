@@ -220,7 +220,12 @@ def test_transcribe_empty_speech_returns_422(mock_transcribe, auth_as):
 
 
 def test_whisper_hallucination_you_on_short_audio():
-    from voice_service import _is_low_quality_transcript, _is_garbage_transcript, _is_prompt_echo
+    from voice_service import (
+        _is_arabic_hallucination,
+        _is_low_quality_transcript,
+        _is_garbage_transcript,
+        _is_prompt_echo,
+    )
 
     assert _is_low_quality_transcript("you", 1500) is True
     assert _is_low_quality_transcript("thank you", 1500) is True
@@ -231,6 +236,22 @@ def test_whisper_hallucination_you_on_short_audio():
     assert _is_garbage_transcript("How many patients", requested_lang="en", audio_bytes=8000) is False
     assert _is_prompt_echo("Patsient appointment doctor reception.") is True
     assert _is_garbage_transcript("Patsient appointment doctor reception", requested_lang="en", audio_bytes=8000) is True
+    assert _is_arabic_hallucination("ترجمة نانسي قطر") is True
+    assert _is_garbage_transcript("ترجمة نانسي قطر", requested_lang="ar", audio_bytes=8000) is True
+    assert _is_arabic_hallucination("عندي كام مريض ودكتور") is False
+
+
+def test_whisper_segment_confidence_filter():
+    from voice_service import _whisper_segments_trustworthy
+
+    assert _whisper_segments_trustworthy(
+        {"segments": [{"text": "مرحبا", "no_speech_prob": 0.1, "avg_logprob": -0.4, "compression_ratio": 1.2}]},
+        audio_bytes=8000,
+    ) is True
+    assert _whisper_segments_trustworthy(
+        {"segments": [{"text": "ترجمة", "no_speech_prob": 0.9, "avg_logprob": -2.0, "compression_ratio": 3.0}]},
+        audio_bytes=5000,
+    ) is False
 
 
 @patch("routers.ai_router._call_model")

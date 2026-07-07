@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../l10n/localization.dart';
+import '../providers/locale_provider.dart';
 import '../services/api_service.dart';
 import '../services/voice_service.dart';
 import '../utils/ui_helpers.dart';
@@ -166,8 +168,9 @@ class _AiChatPanelState extends State<AiChatPanel> {
 
   static final _arabicScript = RegExp(r'[\u0600-\u06FF]');
 
-  String _voiceLanguage() {
-    if (AppLocalizations.currentLocale == 'ar') return 'ar';
+  String _voiceLanguage(BuildContext context) {
+    final locale = Provider.of<LocaleProvider>(context, listen: false);
+    if (locale.isArabic || AppLocalizations.currentLocale == 'ar') return 'ar';
     for (final m in _messages) {
       if (_arabicScript.hasMatch(m['content'] ?? '')) return 'ar';
     }
@@ -244,7 +247,7 @@ class _AiChatPanelState extends State<AiChatPanel> {
             children: [
               VoiceMicButton(
                 controller: _messageController,
-                languageOverride: _voiceLanguage(),
+                languageOverride: _voiceLanguage(context),
                 onAutoSend: _sendMessageWithText,
                 enabled: !_isLoading,
               ),

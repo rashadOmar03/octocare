@@ -30,6 +30,7 @@ class VoicePlatform {
           'noiseSuppression': true,
           'autoGainControl': true,
           'channelCount': 1,
+          'sampleRate': 48000,
         }.jsify() as JSObject,
       );
       return await mediaDevices.getUserMedia(constraints).toDart;
@@ -98,7 +99,13 @@ class VoicePlatform {
     recordingFilename = _filenameForMime(_mimeType);
 
     _recorder = mime != null
-        ? MediaRecorder(_stream!, MediaRecorderOptions(mimeType: mime))
+        ? MediaRecorder(
+            _stream!,
+            MediaRecorderOptions(
+              mimeType: mime,
+              audioBitsPerSecond: 128000,
+            ),
+          )
         : MediaRecorder(_stream!);
 
     _recorder!.ondataavailable = ((BlobEvent event) {
