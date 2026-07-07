@@ -109,6 +109,14 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     setState(() => _isSaving = false);
   }
 
+  String? _validateTime(String? v) {
+    if (v == null || v.trim().isEmpty) return AppLocalizations.tr('required');
+    if (!RegExp(r'^([01]?\d|2[0-3]):[0-5]\d$').hasMatch(v.trim())) {
+      return AppLocalizations.tr('invalid_time');
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _clinicNameController.dispose();
@@ -148,11 +156,12 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               CustomTextField(controller: _durationController, label: AppLocalizations.tr('appointment_duration'), prefixIcon: Icons.timer, keyboardType: TextInputType.number),
               Row(
                 children: [
-                  Expanded(child: CustomTextField(controller: _startHourController, label: AppLocalizations.tr('working_hours'))),
+                  Expanded(child: CustomTextField(controller: _startHourController, label: AppLocalizations.tr('working_hours'), validator: _validateTime)),
                   const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('-')),
-                  Expanded(child: CustomTextField(controller: _endHourController, label: '')),
+                  Expanded(child: CustomTextField(controller: _endHourController, label: '', validator: _validateTime)),
                 ],
               ),
+              Text(AppLocalizations.tr('hours_24_hint'), style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 8),
               Text(AppLocalizations.tr('working_days'), style: Theme.of(context).textTheme.titleSmall),
               Wrap(

@@ -312,6 +312,8 @@ class AppStringsEn {
     'doctor_on_vacation': 'This doctor is on vacation on the selected date',
     'doctor_day_off': 'This doctor is not working on the selected day. Please choose another date.',
     'all_slots_booked': 'All time slots are booked for this day. Please choose another date.',
+    'hours_24_hint': 'Use 24-hour format (e.g. 16:30 for 4:30 PM)',
+    'invalid_time': 'Enter time as HH:MM in 24-hour format',
     'doctor_hours_not_set': 'This doctor has no working hours set for this day. Contact the clinic.',
     'doctor_not_available_today': 'Not available today',
     'in_app_notifications_info': 'In-app notifications are enabled for all roles. Affected users are notified when schedules, fees, or clinic settings change.',

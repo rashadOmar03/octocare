@@ -117,6 +117,25 @@ class ReceptionistService {
     return slots.map((e) => e.toString()).toList();
   }
 
+  Future<Map<String, dynamic>> fetchAvailableSlotsMeta(String doctorId, String date) async {
+    final response = await _api.get('/receptionist/available-slots?doctor_id=$doctorId&date=$date');
+    if (response is List) {
+      return {'slots': response.map((e) => e.toString()).toList(), 'reason': null};
+    }
+    final map = Map<String, dynamic>.from(response as Map);
+    final slots = (map['slots'] as List? ?? []).map((e) => e.toString()).toList();
+    return {
+      'slots': slots,
+      'reason': map['reason']?.toString(),
+      'doctor_on_vacation': map['doctor_on_vacation'] == true || map['reason'] == 'vacation',
+      'clinic_closed': map['clinic_closed'] == true || map['reason'] == 'clinic_closed',
+      'doctor_day_off': map['doctor_day_off'] == true || map['reason'] == 'doctor_day_off',
+      'all_slots_booked': map['all_slots_booked'] == true || map['reason'] == 'all_slots_booked',
+      'working_days_label': map['working_days_label']?.toString() ?? '',
+      'vacation_reason': map['vacation_reason']?.toString(),
+    };
+  }
+
   Future<Appointment> bookAppointment({
     required String patientId,
     required String doctorId,

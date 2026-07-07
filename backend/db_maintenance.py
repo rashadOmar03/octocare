@@ -155,7 +155,7 @@ def run_startup_maintenance(db: Session) -> None:
     drop_spo2_column()
     migrate_doctor_features()
     clean_legacy_invalid_data(db)
-    from clinic_schedule import ensure_clinic_working_days, ensure_doctor_schedules
+    from clinic_schedule import ensure_clinic_working_days, ensure_doctor_schedules, repair_invalid_clinic_hours
 
     try:
         if ensure_clinic_working_days(db):
@@ -163,6 +163,14 @@ def run_startup_maintenance(db: Session) -> None:
     except Exception as exc:
         db.rollback()
         print(f"[Octocare Clinic] Working days sync warning: {exc}")
+
+    try:
+        hours_fixed = repair_invalid_clinic_hours(db)
+        if hours_fixed:
+            print(f"[Octocare Clinic] Repaired invalid clinic/doctor hours ({hours_fixed} rows)")
+    except Exception as exc:
+        db.rollback()
+        print(f"[Octocare Clinic] Hours repair warning: {exc}")
 
     try:
         changed = ensure_doctor_schedules(db)

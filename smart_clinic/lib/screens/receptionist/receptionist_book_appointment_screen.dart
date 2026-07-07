@@ -20,6 +20,10 @@ class _ReceptionistBookAppointmentScreenState extends State<ReceptionistBookAppo
   List<PatientSearchResult> _patients = [];
   List<Map<String, dynamic>> _doctors = [];
   List<String> _slots = [];
+  String? _slotsReason;
+  String? _slotsDaysLabel;
+  bool _doctorOnVacation = false;
+  String? _vacationReason;
   PatientSearchResult? _selectedPatient;
   String? _selectedDoctorId;
   String? _selectedSlot;
@@ -107,12 +111,36 @@ class _ReceptionistBookAppointmentScreenState extends State<ReceptionistBookAppo
     if (_selectedDoctorId == null) return;
     setState(() => _loadingSlots = true);
     try {
-      _slots = await _service.getAvailableSlots(_selectedDoctorId!, _dateStr);
+      final result = await _service.fetchAvailableSlotsMeta(_selectedDoctorId!, _dateStr);
+      _slots = List<String>.from(result['slots'] as List? ?? []);
+      _slotsReason = result['reason']?.toString();
+      _slotsDaysLabel = result['working_days_label']?.toString();
+      _doctorOnVacation = result['doctor_on_vacation'] == true;
+      _vacationReason = result['vacation_reason']?.toString();
       _selectedSlot = null;
     } catch (e) {
       if (mounted) showErrorSnackBar(context, e);
     }
     if (mounted) setState(() => _loadingSlots = false);
+  }
+
+  String? _slotEmptyMessage() {
+    if (_slots.isNotEmpty) return null;
+    final reason = _slotsReason;
+    final daysLabel = _slotsDaysLabel ?? '';
+    if (_doctorOnVacation) {
+      return _vacationReason?.isNotEmpty == true
+          ? '${AppLocalizations.tr('doctor_on_vacation')}: $_vacationReason'
+          : AppLocalizations.tr('doctor_on_vacation');
+    }
+    if (reason == 'clinic_closed') return AppLocalizations.tr('clinic_closed_day');
+    if (reason == 'doctor_day_off') return AppLocalizations.tr('doctor_day_off');
+    if (reason == 'all_slots_booked') return AppLocalizations.tr('all_slots_booked');
+    if (reason == 'no_schedule_hours') return AppLocalizations.tr('doctor_hours_not_set');
+    if (daysLabel.isNotEmpty) {
+      return AppLocalizations.tr('no_slots_available').replaceAll('{days}', daysLabel);
+    }
+    return AppLocalizations.tr('no_data');
   }
 
   Future<void> _book() async {
@@ -207,6 +235,15 @@ class _ReceptionistBookAppointmentScreenState extends State<ReceptionistBookAppo
                   const SizedBox(height: 12),
                   if (_loadingSlots)
                     const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()))
+                  else if (_selectedDoctorId != null && _slots.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        _slotEmptyMessage() ?? AppLocalizations.tr('no_data'),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
                   else if (_selectedDoctorId != null)
                     DropdownButtonFormField<String>(
                       value: _selectedSlot,

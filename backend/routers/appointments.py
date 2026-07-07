@@ -305,9 +305,10 @@ def get_doctors_public(
 
 
 def _generate_slots(start: str, end: str, duration: int) -> list[str]:
+    from clinic_schedule import normalize_clinic_time_pair
+
     slots = []
-    start = normalize_time_hhmm(start, default="09:00")
-    end = normalize_time_hhmm(end, default="17:00")
+    start, end = normalize_clinic_time_pair(start, end)
     sh, sm = map(int, start.split(":"))
     eh, em = map(int, end.split(":"))
     current = sh * 60 + sm
@@ -348,25 +349,13 @@ def book_appointment(
 
     validate_booking_date(data.date, current_user.role, db)
 
-    day_of_week = data.date.weekday()
-    schedule = (
-        db.query(DoctorSchedule)
-        .filter(
-            DoctorSchedule.doctor_id == data.doctor_id,
-            DoctorSchedule.day_of_week == day_of_week,
-            DoctorSchedule.is_available == True,
-        )
-        .first()
-    )
-    if not schedule:
+    settings = db.query(ClinicSettings).first()
+    schedule, block_reason = resolve_doctor_schedule_for_date(db, data.doctor_id, data.date, settings)
+    if block_reason == "vacation":
+        raise HTTPException(status_code=400, detail="Doctor is on vacation on the selected date")
+    if block_reason or not schedule:
         raise HTTPException(status_code=400, detail="Doctor is not available on this day")
 
-    from clinic_schedule import is_doctor_on_vacation
-
-    if is_doctor_on_vacation(db, data.doctor_id, data.date):
-        raise HTTPException(status_code=400, detail="Doctor is on vacation on the selected date")
-
-    settings = db.query(ClinicSettings).first()
     duration = settings.appointment_duration if settings else 30
     available = _generate_slots(schedule.start_time, schedule.end_time, duration)
     if data.time_slot not in available:

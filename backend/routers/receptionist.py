@@ -35,6 +35,7 @@ from appointment_rules import (
 from routers.appointments import (
     _enrich_appointment,
     _generate_slots,
+    _empty_slots_response,
     _get_patient_name,
     _get_doctor_name,
     _notify_staff,
@@ -46,7 +47,7 @@ from otp_service import create_and_send_otp
 from email_service import send_patient_welcome_email
 from profile_utils import profile_personal_info_complete
 from clinic_time import clinic_today, clinic_now, upcoming_from_date
-from clinic_schedule import resolve_doctor_schedule_for_date
+from clinic_schedule import resolve_doctor_schedule_for_date, get_doctor_vacation_on_date, working_days_label
 
 router = APIRouter()
 
@@ -470,20 +471,13 @@ def book_appointment_for_patient(
 
     validate_booking_date(data.date, "receptionist")
 
-    day_of_week = data.date.weekday()
-    schedule = (
-        db.query(DoctorSchedule)
-        .filter(
-            DoctorSchedule.doctor_id == data.doctor_id,
-            DoctorSchedule.day_of_week == day_of_week,
-            DoctorSchedule.is_available == True,
-        )
-        .first()
-    )
-    if not schedule:
+    settings = db.query(ClinicSettings).first()
+    schedule, block_reason = resolve_doctor_schedule_for_date(db, data.doctor_id, data.date, settings)
+    if block_reason == "vacation":
+        raise HTTPException(status_code=400, detail="Doctor is on vacation on the selected date")
+    if block_reason or not schedule:
         raise HTTPException(status_code=400, detail="Doctor is not available on this day")
 
-    settings = db.query(ClinicSettings).first()
     duration = settings.appointment_duration if settings else 30
     available = _generate_slots(schedule.start_time, schedule.end_time, duration)
     if data.time_slot not in available:
@@ -571,17 +565,41 @@ def receptionist_available_slots(
     current_user: User = Depends(require_role("receptionist", "admin")),
 ):
     if slot_date < date.today():
-        return {"slots": []}
+        settings = db.query(ClinicSettings).first()
+        return _empty_slots_response(db, settings, reason="too_soon")
 
     settings = db.query(ClinicSettings).first()
     schedule, block_reason = resolve_doctor_schedule_for_date(db, doctor_id, slot_date, settings)
+    if block_reason == "vacation":
+        off = get_doctor_vacation_on_date(db, doctor_id, slot_date)
+        return _empty_slots_response(
+            db,
+            settings,
+            reason="vacation",
+            vacation_reason=off.reason if off else None,
+        )
     if block_reason or not schedule:
-        return {"slots": []}
+        return _empty_slots_response(db, settings, reason=block_reason or "doctor_day_off")
 
     duration = settings.appointment_duration if settings else 30
     all_slots = _generate_slots(schedule.start_time, schedule.end_time, duration)
+    if not all_slots:
+        return _empty_slots_response(db, settings, reason="no_schedule_hours")
+
     free = [s for s in all_slots if is_slot_available(db, doctor_id, slot_date, s)]
-    return {"slots": free}
+    if not free and all_slots:
+        return _empty_slots_response(db, settings, reason="all_slots_booked")
+
+    label = working_days_label(settings.working_days if settings else None)
+    return {
+        "slots": free,
+        "doctor_on_vacation": False,
+        "clinic_closed": False,
+        "doctor_day_off": False,
+        "all_slots_booked": False,
+        "reason": None,
+        "working_days_label": label,
+    }
 
 
 @router.get("/payable-appointments", response_model=list)

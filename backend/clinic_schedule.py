@@ -225,6 +225,58 @@ def normalize_time_hhmm(raw: str | None, *, default: str = "09:00") -> str:
     return f"{hour:02d}:{minute:02d}"
 
 
+def normalize_clinic_time_pair(
+    start: str | None,
+    end: str | None,
+    *,
+    default_start: str = "09:00",
+    default_end: str = "17:00",
+) -> tuple[str, str]:
+    """
+    Normalize clinic open/close times as 24-hour HH:MM.
+    Fixes common admin input like end=4:30 meaning 4:30 PM when start=08:00.
+    """
+    start_norm = normalize_time_hhmm(start, default=default_start)
+    end_norm = normalize_time_hhmm(end, default=default_end)
+    sh, sm = map(int, start_norm.split(":"))
+    eh, em = map(int, end_norm.split(":"))
+    start_min = sh * 60 + sm
+    end_min = eh * 60 + em
+    if end_min <= start_min and eh < 12:
+        eh += 12
+        end_norm = f"{eh:02d}:{em:02d}"
+        end_min = eh * 60 + em
+    if end_min <= start_min:
+        end_norm = default_end
+    return start_norm, end_norm
+
+
+def repair_invalid_clinic_hours(db: Session) -> int:
+    """Fix clinic and doctor hours where end time is before start (e.g. 4:30 PM saved as 04:30)."""
+    settings = db.query(ClinicSettings).first()
+    changed = 0
+    if settings:
+        start, end = normalize_clinic_time_pair(
+            settings.working_hours_start,
+            settings.working_hours_end,
+        )
+        if settings.working_hours_start != start or settings.working_hours_end != end:
+            settings.working_hours_start = start
+            settings.working_hours_end = end
+            changed += 1
+
+    for row in db.query(DoctorSchedule).all():
+        start, end = normalize_clinic_time_pair(row.start_time, row.end_time)
+        if row.start_time != start or row.end_time != end:
+            row.start_time = start
+            row.end_time = end
+            changed += 1
+
+    if changed:
+        db.commit()
+    return changed
+
+
 def repair_doctor_with_no_available_days(db: Session, doctor_id: str) -> bool:
     """If every clinic working day is off for a doctor, restore clinic default hours."""
     settings = db.query(ClinicSettings).first()
@@ -240,7 +292,8 @@ def repair_doctor_with_no_available_days(db: Session, doctor_id: str) -> bool:
     if not rows or any(r.is_available for r in rows):
         return False
     start = normalize_time_hhmm(settings.working_hours_start if settings else None, default="09:00")
-    end = normalize_time_hhmm(settings.working_hours_end if settings else None, default="17:00")
+    end_default = normalize_time_hhmm(settings.working_hours_end if settings else None, default="17:00")
+    start, end = normalize_clinic_time_pair(start, end_default)
     for row in rows:
         row.is_available = True
         row.start_time = start
@@ -279,14 +332,14 @@ def resolve_doctor_schedule_for_date(
         .first()
     )
     if row and row.is_available:
-        row.start_time = normalize_time_hhmm(row.start_time, default="09:00")
-        row.end_time = normalize_time_hhmm(row.end_time, default="17:00")
+        row.start_time, row.end_time = normalize_clinic_time_pair(row.start_time, row.end_time)
         return row, None
     if row and not row.is_available:
         return None, "doctor_day_off"
 
     start = normalize_time_hhmm(settings.working_hours_start if settings else None, default="09:00")
-    end = normalize_time_hhmm(settings.working_hours_end if settings else None, default="17:00")
+    end_default = normalize_time_hhmm(settings.working_hours_end if settings else None, default="17:00")
+    start, end = normalize_clinic_time_pair(start, end_default)
     row = DoctorSchedule(
         doctor_id=doctor_id,
         day_of_week=day,

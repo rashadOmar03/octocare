@@ -31,6 +31,17 @@ PATIENT_PAYLOAD = {
 }
 
 
+def _patient_payload(suffix: str = "") -> dict:
+    token = suffix or uuid.uuid4().hex[:8]
+    numeric = sum(ord(c) for c in token)
+    digits = f"010{numeric % 100000000:08d}"
+    return {
+        **PATIENT_PAYLOAD,
+        "email": f"patient.{token}@example.com",
+        "phone": digits,
+    }
+
+
 def _staff(role: str) -> User:
     return User(
         id=str(uuid.uuid4()),
@@ -59,7 +70,7 @@ def test_receptionist_register_patient_requires_email_verification(
     mock_otp, mock_welcome, auth_as
 ):
     auth_as("receptionist")
-    response = client.post("/receptionist/patients", json=PATIENT_PAYLOAD)
+    response = client.post("/receptionist/patients", json=_patient_payload())
     assert response.status_code == 201
     body = response.json()
     assert body["otp_sent"] is True
@@ -74,7 +85,7 @@ def test_receptionist_register_patient_requires_email_verification(
 def test_admin_register_patient_requires_email_verification(
     mock_otp, mock_welcome, auth_as
 ):
-    payload = {**PATIENT_PAYLOAD, "email": "admincreated@example.com", "phone": "01098765432"}
+    payload = _patient_payload("admin")
     auth_as("admin")
     response = client.post("/receptionist/patients", json=payload)
     assert response.status_code == 201
@@ -89,12 +100,12 @@ def test_admin_register_patient_requires_email_verification(
 def test_staff_registered_patient_cannot_login_before_otp(
     mock_login_otp, mock_register_otp, mock_welcome, auth_as
 ):
-    email = "blocked@example.com"
-    payload = {**PATIENT_PAYLOAD, "email": email, "phone": "01055556666"}
+    payload = _patient_payload("blocked")
     auth_as("receptionist")
     created = client.post("/receptionist/patients", json=payload)
     assert created.status_code == 201
     temp_password = created.json()["temp_password"]
+    email = payload["email"]
 
     app.dependency_overrides.clear()
     login = client.post(

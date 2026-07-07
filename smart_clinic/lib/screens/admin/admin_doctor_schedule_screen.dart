@@ -54,7 +54,7 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
   void initState() {
     super.initState();
     for (final day in _dayOrder) {
-      _dayAvailable[day] = false;
+      _dayAvailable[day] = {5, 6, 0, 1, 2, 3}.contains(day);
       _dayStart[day] = TextEditingController(text: '09:00');
       _dayEnd[day] = TextEditingController(text: '17:00');
     }
@@ -144,6 +144,16 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
 
   Future<void> _saveSchedule() async {
     if (_selectedDoctorId == null) return;
+    final enabledClinicDays = _dayOrder.where((d) => _dayAvailable[d] == true).length;
+    if (enabledClinicDays == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.tr('doctor_hours_not_set')),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       final schedules = _dayOrder

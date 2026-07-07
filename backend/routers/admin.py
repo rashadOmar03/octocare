@@ -285,12 +285,14 @@ def update_doctor_schedule(
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    from clinic_schedule import sync_doctor_weekly_hours
+    from clinic_schedule import sync_doctor_weekly_hours, normalize_clinic_time_pair, repair_doctor_with_no_available_days
 
     if data.working_hours_start and data.working_hours_end:
-        sync_doctor_weekly_hours(db, doctor_id, data.working_hours_start, data.working_hours_end)
+        start, end = normalize_clinic_time_pair(data.working_hours_start, data.working_hours_end)
+        sync_doctor_weekly_hours(db, doctor_id, start, end)
 
     for item in data.schedules:
+        start, end = normalize_clinic_time_pair(item.start_time, item.end_time)
         row = (
             db.query(DoctorSchedule)
             .filter(
@@ -300,19 +302,21 @@ def update_doctor_schedule(
             .first()
         )
         if row:
-            row.start_time = item.start_time
-            row.end_time = item.end_time
+            row.start_time = start
+            row.end_time = end
             row.is_available = item.is_available
         else:
             db.add(
                 DoctorSchedule(
                     doctor_id=doctor_id,
                     day_of_week=item.day_of_week,
-                    start_time=item.start_time,
-                    end_time=item.end_time,
+                    start_time=start,
+                    end_time=end,
                     is_available=item.is_available,
                 )
             )
+
+    repair_doctor_with_no_available_days(db, doctor_id)
 
     doc_name = _doctor_display_name(db, doctor)
     notify_doctor(
@@ -990,7 +994,7 @@ def update_settings(
     current_user: User = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ):
-    from clinic_schedule import ensure_doctor_schedules, sync_all_doctors_hours_from_clinic
+    from clinic_schedule import ensure_doctor_schedules, sync_all_doctors_hours_from_clinic, normalize_clinic_time_pair
 
     settings = db.query(ClinicSettings).first()
     if not settings:
@@ -1002,6 +1006,14 @@ def update_settings(
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(settings, field, value)
+
+    if "working_hours_start" in update_data or "working_hours_end" in update_data:
+        start, end = normalize_clinic_time_pair(
+            settings.working_hours_start,
+            settings.working_hours_end,
+        )
+        settings.working_hours_start = start
+        settings.working_hours_end = end
 
     if "working_days" in update_data:
         ensure_doctor_schedules(db)
