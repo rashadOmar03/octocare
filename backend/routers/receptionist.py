@@ -67,7 +67,12 @@ def _generate_temp_password(length: int = 8) -> str:
     return "".join(random.choices(chars, k=length))
 
 
-def _default_fee(db: Session) -> float:
+def _default_fee(db: Session, doctor_id: str | None = None) -> float:
+    if doctor_id:
+        doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
+        if doctor:
+            from clinic_schedule import get_doctor_consultation_fee
+            return get_doctor_consultation_fee(db, doctor)
     settings = db.query(ClinicSettings).first()
     return float(settings.default_fee if settings else 100.0)
 
@@ -177,7 +182,10 @@ def _save_payment_record(
     method: str,
     proof_url: str | None,
 ) -> dict:
-    amount = _default_fee(db)
+    apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not apt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    amount = _default_fee(db, apt.doctor_id)
     rec_profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
 
     existing = db.query(Payment).filter(Payment.appointment_id == appointment_id).first()

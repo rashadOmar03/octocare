@@ -144,6 +144,13 @@ class _ReceptionistReportsScreenState extends State<ReceptionistReportsScreen> {
             onDownload: () => _download('/reports/appointments', 'appointment_report.pdf'),
           ),
           const SizedBox(height: 12),
+          _reportCard(
+            title: AppLocalizations.tr('reception_report'),
+            description: AppLocalizations.tr('audit_report'),
+            icon: Icons.fact_check,
+            onDownload: () => _download('/reports/clinic-audit', 'clinic_audit_report.pdf'),
+          ),
+          const SizedBox(height: 12),
           _patientReportCard(),
         ],
       ),

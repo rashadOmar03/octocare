@@ -209,6 +209,50 @@ class DoctorScheduleResponse(BaseModel):
     is_available: bool
 
 
+class DoctorScheduleItemUpdate(BaseModel):
+    day_of_week: int
+    start_time: str
+    end_time: str
+    is_available: bool = True
+
+
+class DoctorSchedulesUpdate(BaseModel):
+    schedules: List[DoctorScheduleItemUpdate]
+    working_hours_start: Optional[str] = None
+    working_hours_end: Optional[str] = None
+
+
+class DoctorTimeOffCreate(BaseModel):
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+
+
+class DoctorTimeOffResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    doctor_id: str
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class DoctorFeeUpdate(BaseModel):
+    consultation_fee: Optional[float] = None
+
+
+class DoctorAdminDetailResponse(BaseModel):
+    doctor_id: str
+    name: str
+    specialty_name: Optional[str] = None
+    consultation_fee: Optional[float] = None
+    default_fee: float
+    schedules: List[DoctorScheduleResponse]
+    time_off: List[DoctorTimeOffResponse]
+
+
 class DoctorResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -217,6 +261,7 @@ class DoctorResponse(BaseModel):
     specialty_id: int
     qualifications: Optional[str] = None
     bio: Optional[str] = None
+    consultation_fee: Optional[float] = None
     profile: Optional[ProfileResponse] = None
     specialty: Optional[SpecialtyResponse] = None
     schedules: Optional[List[DoctorScheduleResponse]] = None

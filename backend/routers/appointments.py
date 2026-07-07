@@ -270,12 +270,17 @@ def get_doctors_public(
     if specialty_id:
         query = query.filter(Doctor.specialty_id == specialty_id)
     doctors = query.all()
+    from clinic_schedule import get_doctor_consultation_fee, is_doctor_on_vacation
+    from datetime import date as date_cls
+
+    today = date_cls.today()
     result = []
     for d in doctors:
         profile = db.query(Profile).filter(Profile.id == d.profile_id).first()
         specialty = db.query(Specialty).filter(Specialty.id == d.specialty_id).first()
         from routers.reviews import doctor_rating_stats
         rating = doctor_rating_stats(db, d.id)
+        on_vacation = is_doctor_on_vacation(db, d.id, today)
         result.append({
             "id": d.id,
             "name": f"{profile.first_name} {profile.last_name}" if profile else "Unknown",
@@ -283,6 +288,9 @@ def get_doctors_public(
             "specialty_id": d.specialty_id,
             "qualifications": d.qualifications,
             "bio": d.bio,
+            "profile_photo": profile.photo_url if profile else None,
+            "consultation_fee": get_doctor_consultation_fee(db, d),
+            "on_vacation_today": on_vacation,
             "average_rating": rating["average_rating"],
             "review_count": rating["review_count"],
         })
@@ -341,6 +349,11 @@ def book_appointment(
     )
     if not schedule:
         raise HTTPException(status_code=400, detail="Doctor is not available on this day")
+
+    from clinic_schedule import is_doctor_on_vacation
+
+    if is_doctor_on_vacation(db, data.doctor_id, data.date):
+        raise HTTPException(status_code=400, detail="Doctor is on vacation on the selected date")
 
     settings = db.query(ClinicSettings).first()
     duration = settings.appointment_duration if settings else 30
@@ -502,7 +515,17 @@ def available_slots(
         .first()
     )
     if not schedule:
-        return {"slots": []}
+        return {"slots": [], "doctor_on_vacation": False}
+
+    from clinic_schedule import is_doctor_on_vacation, get_doctor_vacation_on_date
+
+    if is_doctor_on_vacation(db, doctor_id, slot_date):
+        off = get_doctor_vacation_on_date(db, doctor_id, slot_date)
+        return {
+            "slots": [],
+            "doctor_on_vacation": True,
+            "vacation_reason": off.reason if off else None,
+        }
 
     duration = settings.appointment_duration if settings else 30
     all_slots = _generate_slots(schedule.start_time, schedule.end_time, duration)
@@ -511,7 +534,7 @@ def available_slots(
         s for s in all_slots
         if is_slot_available(db, doctor_id, slot_date, s)
     ]
-    return {"slots": free}
+    return {"slots": free, "doctor_on_vacation": False}
 
 
 @router.get("/{appointment_id}")
@@ -936,6 +959,11 @@ def receptionist_reschedule(
     )
     if not schedule:
         raise HTTPException(status_code=400, detail="Doctor is not available on this day")
+
+    from clinic_schedule import is_doctor_on_vacation
+
+    if is_doctor_on_vacation(db, appointment.doctor_id, data.date):
+        raise HTTPException(status_code=400, detail="Doctor is on vacation on the selected date")
 
     settings = db.query(ClinicSettings).first()
     duration = settings.appointment_duration if settings else 30

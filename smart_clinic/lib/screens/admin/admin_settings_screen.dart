@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/localization.dart';
 import '../../services/admin_service.dart';
+import '../../config/routes.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/bottom_nav.dart';
@@ -22,11 +23,33 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   final _feeController = TextEditingController();
   final _startHourController = TextEditingController();
   final _endHourController = TextEditingController();
+  final _durationController = TextEditingController();
   bool _isLoading = true;
   bool _isSaving = false;
-  bool _notificationsEnabled = true;
-  bool _smsEnabled = false;
-  bool _emailEnabled = true;
+  final Set<int> _workingDays = {5, 6, 0, 1, 2, 3};
+
+  static const _allDays = [5, 6, 0, 1, 2, 3, 4];
+
+  String _dayLabel(int day) {
+    switch (day) {
+      case 0:
+        return AppLocalizations.tr('day_mon');
+      case 1:
+        return AppLocalizations.tr('day_tue');
+      case 2:
+        return AppLocalizations.tr('day_wed');
+      case 3:
+        return AppLocalizations.tr('day_thu');
+      case 4:
+        return AppLocalizations.tr('day_fri');
+      case 5:
+        return AppLocalizations.tr('day_sat');
+      case 6:
+        return AppLocalizations.tr('day_sun');
+      default:
+        return '$day';
+    }
+  }
 
   @override
   void initState() {
@@ -45,9 +68,12 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       _feeController.text = settings['default_fee']?.toString() ?? '';
       _startHourController.text = settings['working_hours_start'] ?? '09:00';
       _endHourController.text = settings['working_hours_end'] ?? '17:00';
-      _notificationsEnabled = settings['notifications_enabled'] ?? true;
-      _smsEnabled = settings['sms_enabled'] ?? false;
-      _emailEnabled = settings['email_enabled'] ?? true;
+      _durationController.text = settings['appointment_duration']?.toString() ?? '30';
+      final rawDays = settings['working_days']?.toString() ?? '5,6,0,1,2,3';
+      _workingDays
+        ..clear()
+        ..addAll(rawDays.split(',').map((e) => int.tryParse(e.trim())).whereType<int>());
+      if (_workingDays.isEmpty) _workingDays.addAll([5, 6, 0, 1, 2, 3]);
     } catch (_) {}
     setState(() => _isLoading = false);
   }
@@ -56,6 +82,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
+      final days = _workingDays.toList()..sort();
       await _service.updateSettings({
         'clinic_name': _clinicNameController.text,
         'address': _addressController.text,
@@ -64,13 +91,20 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
         'default_fee': double.tryParse(_feeController.text),
         'working_hours_start': _startHourController.text,
         'working_hours_end': _endHourController.text,
-        'notifications_enabled': _notificationsEnabled,
-        'sms_enabled': _smsEnabled,
-        'email_enabled': _emailEnabled,
+        'working_days': days.join(','),
+        'appointment_duration': int.tryParse(_durationController.text) ?? 30,
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.tr('settings_saved')), backgroundColor: const Color(0xFF388E3C)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.tr('settings_saved')), backgroundColor: const Color(0xFF388E3C)),
+        );
+      }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
+        );
+      }
     }
     setState(() => _isSaving = false);
   }
@@ -84,6 +118,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     _feeController.dispose();
     _startHourController.dispose();
     _endHourController.dispose();
+    _durationController.dispose();
     super.dispose();
   }
 
@@ -110,6 +145,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               Text(AppLocalizations.tr('appointments'), style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               CustomTextField(controller: _feeController, label: AppLocalizations.tr('default_fee'), prefixIcon: Icons.attach_money, keyboardType: TextInputType.number),
+              CustomTextField(controller: _durationController, label: AppLocalizations.tr('appointment_duration'), prefixIcon: Icons.timer, keyboardType: TextInputType.number),
               Row(
                 children: [
                   Expanded(child: CustomTextField(controller: _startHourController, label: AppLocalizations.tr('working_hours'))),
@@ -117,11 +153,45 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   Expanded(child: CustomTextField(controller: _endHourController, label: '')),
                 ],
               ),
+              const SizedBox(height: 8),
+              Text(AppLocalizations.tr('working_days'), style: Theme.of(context).textTheme.titleSmall),
+              Wrap(
+                spacing: 8,
+                children: _allDays.map((day) {
+                  final selected = _workingDays.contains(day);
+                  return FilterChip(
+                    label: Text(_dayLabel(day)),
+                    selected: selected,
+                    onSelected: (v) => setState(() {
+                      if (v) {
+                        _workingDays.add(day);
+                      } else {
+                        _workingDays.remove(day);
+                      }
+                    }),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.pushNamed(context, AppRoutes.adminDoctorSchedules),
+                icon: const Icon(Icons.medical_services_outlined),
+                label: Text(AppLocalizations.tr('manage_doctor_schedules')),
+              ),
               const SizedBox(height: 16),
               Text(AppLocalizations.tr('notifications'), style: Theme.of(context).textTheme.titleMedium),
-              SwitchListTile(title: Text(AppLocalizations.tr('push_notifications')), value: _notificationsEnabled, onChanged: (v) => setState(() => _notificationsEnabled = v)),
-              SwitchListTile(title: Text(AppLocalizations.tr('sms')), value: _smsEnabled, onChanged: (v) => setState(() => _smsEnabled = v)),
-              SwitchListTile(title: Text(AppLocalizations.tr('email_notifications')), value: _emailEnabled, onChanged: (v) => setState(() => _emailEnabled = v)),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.notifications_active, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(AppLocalizations.tr('in_app_notifications_info'))),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: _isSaving ? null : _save,

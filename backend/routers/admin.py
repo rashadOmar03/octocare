@@ -7,7 +7,7 @@ from sqlalchemy import func
 
 from database import get_db
 from models import (
-    User, Profile, Doctor, DoctorSchedule, Specialty,
+    User, Profile, Doctor, DoctorSchedule, DoctorTimeOff, Specialty,
     Appointment, Payment, ClinicSettings, Prescription, PrescriptionItem,
     Notification, SensorData, Document, AIConversation, MedicalRecord,
 )
@@ -20,7 +20,10 @@ from schemas import (
     SpecialtyCreate, SpecialtyResponse, ClinicSettingsUpdate, ClinicSettingsResponse,
     UserResponse, AdminUserListItem, AdminDoctorInfo, AdminCreate, AdminPatientDetailResponse,
     ChartDataPoint, ReceptionistCreate, ReceptionistUpdate, DocumentResponse, PurgePatientsRequest,
+    DoctorAdminDetailResponse, DoctorSchedulesUpdate, DoctorTimeOffCreate, DoctorTimeOffResponse,
+    DoctorFeeUpdate, DoctorScheduleResponse,
 )
+from notification_helpers import notify_doctor, notify_user, notify_role_users
 from audit_service import log_audit
 from patient_purge import purge_all_patients
 from auth import hash_password, require_role, get_current_user
@@ -225,6 +228,225 @@ def update_doctor(
     db.commit()
     db.refresh(doctor)
     return doctor
+
+
+def _doctor_display_name(db: Session, doctor: Doctor) -> str:
+    profile = db.query(Profile).filter(Profile.id == doctor.profile_id).first()
+    if profile:
+        name = f"{profile.first_name or ''} {profile.last_name or ''}".strip()
+        if name:
+            return f"Dr. {name}"
+    return "Doctor"
+
+
+@router.get("/doctors/{doctor_id}/manage", response_model=DoctorAdminDetailResponse)
+def get_doctor_manage(
+    doctor_id: str,
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+
+    settings = db.query(ClinicSettings).first()
+    specialty = db.query(Specialty).filter(Specialty.id == doctor.specialty_id).first()
+    schedules = (
+        db.query(DoctorSchedule)
+        .filter(DoctorSchedule.doctor_id == doctor_id)
+        .order_by(DoctorSchedule.day_of_week)
+        .all()
+    )
+    time_off = (
+        db.query(DoctorTimeOff)
+        .filter(DoctorTimeOff.doctor_id == doctor_id)
+        .order_by(DoctorTimeOff.start_date.desc())
+        .all()
+    )
+    return DoctorAdminDetailResponse(
+        doctor_id=doctor.id,
+        name=_doctor_display_name(db, doctor),
+        specialty_name=specialty.name if specialty else None,
+        consultation_fee=doctor.consultation_fee,
+        default_fee=float(settings.default_fee) if settings else 100.0,
+        schedules=schedules,
+        time_off=time_off,
+    )
+
+
+@router.put("/doctors/{doctor_id}/schedule", response_model=DoctorAdminDetailResponse)
+def update_doctor_schedule(
+    doctor_id: str,
+    data: DoctorSchedulesUpdate,
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+
+    from clinic_schedule import sync_doctor_weekly_hours
+
+    if data.working_hours_start and data.working_hours_end:
+        sync_doctor_weekly_hours(db, doctor_id, data.working_hours_start, data.working_hours_end)
+
+    for item in data.schedules:
+        row = (
+            db.query(DoctorSchedule)
+            .filter(
+                DoctorSchedule.doctor_id == doctor_id,
+                DoctorSchedule.day_of_week == item.day_of_week,
+            )
+            .first()
+        )
+        if row:
+            row.start_time = item.start_time
+            row.end_time = item.end_time
+            row.is_available = item.is_available
+        else:
+            db.add(
+                DoctorSchedule(
+                    doctor_id=doctor_id,
+                    day_of_week=item.day_of_week,
+                    start_time=item.start_time,
+                    end_time=item.end_time,
+                    is_available=item.is_available,
+                )
+            )
+
+    doc_name = _doctor_display_name(db, doctor)
+    notify_doctor(
+        db,
+        doctor_id,
+        "Schedule updated",
+        f"Your working schedule was updated by admin.",
+    )
+    log_audit(
+        db,
+        current_user.id,
+        "update_doctor_schedule",
+        "doctor",
+        doctor_id,
+        f"Updated schedule for {doc_name}",
+    )
+    db.commit()
+    return get_doctor_manage(doctor_id, current_user, db)
+
+
+@router.post("/doctors/{doctor_id}/time-off", response_model=DoctorTimeOffResponse, status_code=status.HTTP_201_CREATED)
+def add_doctor_time_off(
+    doctor_id: str,
+    data: DoctorTimeOffCreate,
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+    if data.end_date < data.start_date:
+        raise HTTPException(status_code=400, detail="End date must be on or after start date")
+
+    row = DoctorTimeOff(
+        doctor_id=doctor_id,
+        start_date=data.start_date,
+        end_date=data.end_date,
+        reason=data.reason,
+    )
+    db.add(row)
+
+    doc_name = _doctor_display_name(db, doctor)
+    reason = data.reason or "vacation"
+    notify_doctor(
+        db,
+        doctor_id,
+        "Time off scheduled",
+        f"Admin scheduled time off ({data.start_date} to {data.end_date}): {reason}.",
+    )
+
+    affected = (
+        db.query(Appointment)
+        .filter(
+            Appointment.doctor_id == doctor_id,
+            Appointment.date >= data.start_date,
+            Appointment.date <= data.end_date,
+            Appointment.status.in_(["pending", "confirmed", "arrived"]),
+        )
+        .all()
+    )
+    for apt in affected:
+        patient = db.query(Profile).filter(Profile.id == apt.patient_id).first()
+        if patient:
+            notify_user(
+                db,
+                patient.user_id,
+                "Doctor unavailable",
+                (
+                    f"{doc_name} is not available on {apt.date}. "
+                    f"Please reschedule your appointment ({apt.time_slot})."
+                ),
+            )
+
+    log_audit(
+        db,
+        current_user.id,
+        "add_doctor_time_off",
+        "doctor",
+        doctor_id,
+        f"Time off {data.start_date}–{data.end_date} for {doc_name}",
+    )
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/doctors/{doctor_id}/time-off/{time_off_id}")
+def delete_doctor_time_off(
+    doctor_id: str,
+    time_off_id: str,
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    row = (
+        db.query(DoctorTimeOff)
+        .filter(DoctorTimeOff.id == time_off_id, DoctorTimeOff.doctor_id == doctor_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Time off not found")
+    db.delete(row)
+    notify_doctor(db, doctor_id, "Time off removed", "Admin removed a scheduled time-off period.")
+    db.commit()
+    return {"message": "Time off removed"}
+
+
+@router.put("/doctors/{doctor_id}/fee", response_model=DoctorAdminDetailResponse)
+def update_doctor_fee(
+    doctor_id: str,
+    data: DoctorFeeUpdate,
+    current_user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+):
+    doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+    doctor.consultation_fee = data.consultation_fee
+    fee_label = f"{data.consultation_fee} EGP" if data.consultation_fee is not None else "clinic default"
+    notify_doctor(
+        db,
+        doctor_id,
+        "Consultation fee updated",
+        f"Your consultation fee was set to {fee_label} by admin.",
+    )
+    log_audit(
+        db,
+        current_user.id,
+        "update_doctor_fee",
+        "doctor",
+        doctor_id,
+        f"Fee set to {fee_label} for {_doctor_display_name(db, doctor)}",
+    )
+    db.commit()
+    return get_doctor_manage(doctor_id, current_user, db)
 
 
 @router.put("/doctors/{doctor_id}/deactivate")
@@ -768,13 +990,61 @@ def update_settings(
     current_user: User = Depends(require_role("admin")),
     db: Session = Depends(get_db),
 ):
+    from clinic_schedule import ensure_doctor_schedules, sync_all_doctors_hours_from_clinic
+
     settings = db.query(ClinicSettings).first()
     if not settings:
         raise HTTPException(status_code=404, detail="Settings not configured")
 
+    old_hours = (settings.working_hours_start, settings.working_hours_end)
+    old_days = settings.working_days
+
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(settings, field, value)
+
+    if "working_days" in update_data:
+        ensure_doctor_schedules(db)
+    if "working_hours_start" in update_data or "working_hours_end" in update_data:
+        sync_all_doctors_hours_from_clinic(db, settings)
+
+    hours_changed = (
+        settings.working_hours_start,
+        settings.working_hours_end,
+    ) != old_hours
+    days_changed = settings.working_days != old_days
+
+    if hours_changed or days_changed or "appointment_duration" in update_data or "default_fee" in update_data:
+        notify_role_users(
+            db,
+            "doctor",
+            "Clinic settings updated",
+            "Clinic working hours or fees were updated by admin. Please review your schedule.",
+            exclude_user_id=current_user.id,
+        )
+        notify_role_users(
+            db,
+            "receptionist",
+            "Clinic settings updated",
+            "Clinic settings were updated by admin.",
+            exclude_user_id=current_user.id,
+        )
+        notify_role_users(
+            db,
+            "admin",
+            "Clinic settings updated",
+            f"Clinic settings were updated by {current_user.email}.",
+            exclude_user_id=current_user.id,
+        )
+
+    log_audit(
+        db,
+        current_user.id,
+        "update_clinic_settings",
+        "clinic_settings",
+        str(settings.id),
+        "Clinic settings updated",
+    )
 
     db.commit()
     db.refresh(settings)

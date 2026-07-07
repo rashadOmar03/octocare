@@ -135,6 +135,7 @@ class _AppDrawerState extends State<AppDrawer> {
           _menuItem(context, Icons.smart_toy, 'ai_assistant', AppRoutes.adminAi),
           _menuItem(context, Icons.notifications, 'notifications', AppRoutes.adminNotifications),
           _menuItem(context, Icons.settings, 'settings', AppRoutes.adminSettings),
+          _menuItem(context, Icons.schedule, 'doctor_schedules', AppRoutes.adminDoctorSchedules),
           _menuItem(context, Icons.person, 'profile', AppRoutes.adminProfile),
         ];
       default:

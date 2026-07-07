@@ -67,6 +67,7 @@ class AppRoutes {
   static const String adminRevenue = '/admin/revenue';
   static const String adminPrescriptionDetail = '/admin/prescription-detail';
   static const String adminSettings = '/admin/settings';
+  static const String adminDoctorSchedules = '/admin/doctor-schedules';
   static const String adminProfile = '/admin/profile';
   static const String adminAi = '/admin/ai';
   static const String adminNotifications = '/admin/notifications';

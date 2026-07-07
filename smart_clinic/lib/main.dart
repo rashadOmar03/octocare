@@ -66,6 +66,7 @@ import 'screens/admin/admin_appointments_screen.dart';
 import 'screens/admin/admin_prescriptions_screen.dart';
 import 'screens/admin/admin_revenue_screen.dart';
 import 'screens/admin/admin_settings_screen.dart';
+import 'screens/admin/admin_doctor_schedule_screen.dart';
 import 'screens/admin/admin_profile_screen.dart';
 import 'screens/shared/ai_chat_screen.dart';
 import 'screens/shared/notifications_screen.dart';
@@ -226,6 +227,7 @@ class OctocareClinicApp extends StatelessWidget {
           AppRoutes.adminRevenue: (_) => const RoleGuard(requiredRole: 'admin', child: AdminRevenueScreen()),
           AppRoutes.adminPrescriptionDetail: (_) => const RoleGuard(requiredRole: 'admin', child: PrescriptionDetailScreen()),
           AppRoutes.adminSettings: (_) => const RoleGuard(requiredRole: 'admin', child: AdminSettingsScreen()),
+          AppRoutes.adminDoctorSchedules: (_) => const RoleGuard(requiredRole: 'admin', child: AdminDoctorScheduleScreen()),
           AppRoutes.adminProfile: (_) => const RoleGuard(requiredRole: 'admin', child: AdminProfileScreen()),
           AppRoutes.adminNotifications: (_) => const RoleGuard(requiredRole: 'admin', child: NotificationsScreen()),
           AppRoutes.adminAi: (_) => const RoleGuard(requiredRole: 'admin', child: AiChatScreen(role: 'admin')),

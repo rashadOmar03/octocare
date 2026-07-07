@@ -64,6 +64,29 @@ class AdminService {
     await _api.put('/admin/settings', data);
   }
 
+  Future<Map<String, dynamic>> getDoctorManage(String doctorId) async {
+    final response = await _api.get('/admin/doctors/$doctorId/manage');
+    return Map<String, dynamic>.from(response);
+  }
+
+  Future<Map<String, dynamic>> updateDoctorSchedule(String doctorId, Map<String, dynamic> data) async {
+    final response = await _api.put('/admin/doctors/$doctorId/schedule', data);
+    return Map<String, dynamic>.from(response);
+  }
+
+  Future<void> addDoctorTimeOff(String doctorId, Map<String, dynamic> data) async {
+    await _api.post('/admin/doctors/$doctorId/time-off', data);
+  }
+
+  Future<void> deleteDoctorTimeOff(String doctorId, String timeOffId) async {
+    await _api.delete('/admin/doctors/$doctorId/time-off/$timeOffId');
+  }
+
+  Future<Map<String, dynamic>> updateDoctorFee(String doctorId, double? fee) async {
+    final response = await _api.put('/admin/doctors/$doctorId/fee', {'consultation_fee': fee});
+    return Map<String, dynamic>.from(response);
+  }
+
   Future<dynamic> getChartData(String chartType) async {
     final response = await _api.get('/admin/charts/$chartType');
     return response;

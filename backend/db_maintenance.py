@@ -66,6 +66,28 @@ def drop_spo2_column() -> bool:
     return True
 
 
+def migrate_doctor_features() -> bool:
+    """Add doctors.consultation_fee on existing databases (Postgres/SQLite)."""
+    from sqlalchemy import inspect, text
+
+    from database import engine
+
+    try:
+        insp = inspect(engine)
+        if "doctors" not in insp.get_table_names():
+            return False
+        cols = {c["name"] for c in insp.get_columns("doctors")}
+        if "consultation_fee" in cols:
+            return False
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE doctors ADD COLUMN consultation_fee FLOAT"))
+        print("[Octocare Clinic] Added doctors.consultation_fee column")
+        return True
+    except Exception as exc:
+        print(f"[Octocare Clinic] Doctor fee migration warning: {exc}")
+        return False
+
+
 def _appointment_is_paid(db: Session, appointment_id: str) -> bool:
     payment = (
         db.query(Payment)
@@ -131,6 +153,7 @@ def clean_legacy_invalid_data(db: Session) -> dict[str, int]:
 
 def run_startup_maintenance(db: Session) -> None:
     drop_spo2_column()
+    migrate_doctor_features()
     clean_legacy_invalid_data(db)
     from clinic_schedule import ensure_clinic_working_days, ensure_doctor_schedules
 

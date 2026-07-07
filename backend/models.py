@@ -88,10 +88,12 @@ class Doctor(Base):
     specialty_id = Column(Integer, ForeignKey("specialties.id"), nullable=False)
     qualifications = Column(String, nullable=True)
     bio = Column(String, nullable=True)
+    consultation_fee = Column(Float, nullable=True)
 
     profile = relationship("Profile", back_populates="doctor")
     specialty = relationship("Specialty", back_populates="doctors")
     schedules = relationship("DoctorSchedule", back_populates="doctor")
+    time_off = relationship("DoctorTimeOff", back_populates="doctor")
     appointments = relationship("Appointment", back_populates="doctor")
     doctor_records = relationship(
         "MedicalRecord", back_populates="doctor", foreign_keys="MedicalRecord.doctor_id"
@@ -112,6 +114,19 @@ class DoctorSchedule(Base):
     is_available = Column(Boolean, default=True)
 
     doctor = relationship("Doctor", back_populates="schedules")
+
+
+class DoctorTimeOff(Base):
+    __tablename__ = "doctor_time_off"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    doctor_id = Column(String, ForeignKey("doctors.id", ondelete="CASCADE"), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    reason = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    doctor = relationship("Doctor", back_populates="time_off")
 
 
 class Appointment(Base):

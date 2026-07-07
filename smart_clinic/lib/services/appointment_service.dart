@@ -54,13 +54,29 @@ class AppointmentService {
   }
 
   Future<List<Map<String, dynamic>>> getAvailableSlots(String doctorId, String date) async {
+    final result = await fetchAvailableSlots(doctorId, date);
+    return result['slots'] as List<Map<String, dynamic>>;
+  }
+
+  Future<Map<String, dynamic>> fetchAvailableSlots(String doctorId, String date) async {
     final response = await _api.get('/appointments/available-slots?doctor_id=$doctorId&date=$date');
     if (response is List) {
-      return List<Map<String, dynamic>>.from(
-        response.map((e) => Map<String, dynamic>.from(e as Map)),
-      );
+      return {
+        'slots': List<Map<String, dynamic>>.from(
+          response.map((e) => Map<String, dynamic>.from(e as Map)),
+        ),
+        'doctor_on_vacation': false,
+        'vacation_reason': null,
+      };
     }
-    return (response['slots'] as List? ?? []).map((e) => <String, dynamic>{'time': e.toString(), 'available': true}).toList();
+    final slots = (response['slots'] as List? ?? [])
+        .map((e) => <String, dynamic>{'time': e.toString(), 'available': true})
+        .toList();
+    return {
+      'slots': slots,
+      'doctor_on_vacation': response['doctor_on_vacation'] == true,
+      'vacation_reason': response['vacation_reason']?.toString(),
+    };
   }
 
   Future<List<Appointment>> getDoctorQueue({String? date}) async {

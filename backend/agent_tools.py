@@ -206,12 +206,14 @@ def tool_list_doctors(db: Session) -> list[dict]:
             continue
         specialty = db.query(Specialty).filter(Specialty.id == d.specialty_id).first()
         rating = _rating_stats(db, d.id)
+        from clinic_schedule import get_doctor_consultation_fee
         result.append({
             "doctor_id": d.id,
             "name": _doc_name(profile),
             "specialty": specialty.name if specialty else "General",
             "qualifications": d.qualifications,
             "bio": d.bio,
+            "consultation_fee": get_doctor_consultation_fee(db, d),
             "average_rating": rating["average_rating"],
             "review_count": rating["review_count"],
         })
@@ -275,6 +277,18 @@ def tool_doctor_availability(
     default_end = settings.working_hours_end if settings else "17:00"
     duration = settings.appointment_duration if settings else 30
 
+    from clinic_schedule import is_doctor_on_vacation, get_doctor_vacation_on_date, is_clinic_open
+
+    if not is_clinic_open(target_date, settings):
+        return [{
+            "date": str(target_date),
+            "day": target_date.strftime("%A"),
+            "is_working": False,
+            "note": "Clinic is closed on this day",
+            "available_slots": [],
+            "booked_slots": [],
+        }]
+
     doctors_q = db.query(Doctor).all()
     results = []
 
@@ -298,6 +312,21 @@ def tool_doctor_availability(
                 continue
 
         specialty = db.query(Specialty).filter(Specialty.id == d.specialty_id).first()
+
+        if is_doctor_on_vacation(db, d.id, target_date):
+            off = get_doctor_vacation_on_date(db, d.id, target_date)
+            reason = off.reason if off and off.reason else "vacation"
+            results.append({
+                "doctor": doc_full_name,
+                "specialty": specialty.name if specialty else "General",
+                "date": str(target_date),
+                "day": target_date.strftime("%A"),
+                "is_working": False,
+                "note": f"{doc_full_name} is on {reason} on {target_date.strftime('%A')}",
+                "available_slots": [],
+                "booked_slots": [],
+            })
+            continue
 
         dow = target_date.weekday()  # 0=Mon
         sched = (

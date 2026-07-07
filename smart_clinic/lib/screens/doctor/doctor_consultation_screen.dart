@@ -9,6 +9,7 @@ import '../../widgets/custom_text_field.dart';
 import '../../widgets/structured_soap_view.dart';
 import '../../widgets/ai_review_panel.dart';
 import '../../widgets/voice_mic_button.dart';
+import '../../widgets/user_avatar.dart';
 import '../../utils/time_format.dart';
 import '../../utils/ui_helpers.dart';
 
@@ -796,7 +797,11 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
             if (_appointment != null)
               Card(
                 child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
+                  leading: UserAvatar(
+                    name: _appointment!.patientName,
+                    photoUrl: _appointment!.patientPhotoUrl,
+                    patientId: _appointment!.patientId,
+                  ),
                   title: Text(_appointment!.patientName ?? ''),
                   subtitle: Text('${_appointment!.date} - ${TimeFormat.format24To12(_appointment!.timeSlot)}'),
                   trailing: _appointment!.queueNumber != null

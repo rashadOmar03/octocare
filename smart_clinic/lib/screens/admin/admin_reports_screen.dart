@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../l10n/localization.dart';
 import '../../services/report_download_service.dart';
+import '../../services/api_service.dart';
 import '../../widgets/bottom_nav.dart';
+import '../../utils/ui_helpers.dart';
 
 class AdminReportsScreen extends StatefulWidget {
   const AdminReportsScreen({super.key});
@@ -12,10 +14,39 @@ class AdminReportsScreen extends StatefulWidget {
 
 class _AdminReportsScreenState extends State<AdminReportsScreen> {
   String _reportType = 'clinic-audit';
+  String _staffRole = 'doctor';
   String _exportFormat = 'pdf';
   DateTime? _fromDate;
   DateTime? _toDate;
   bool _isLoading = false;
+  final _patientSearchController = TextEditingController();
+  List<Map<String, dynamic>> _patientResults = [];
+  Map<String, dynamic>? _selectedPatient;
+  bool _searchingPatients = false;
+
+  @override
+  void dispose() {
+    _patientSearchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _searchPatients(String query) async {
+    if (query.trim().length < 2) {
+      setState(() => _patientResults = []);
+      return;
+    }
+    setState(() => _searchingPatients = true);
+    try {
+      final response = await ApiService.instance.get('/receptionist/patients/search?q=${Uri.encodeComponent(query.trim())}');
+      final list = response is List ? response : [];
+      setState(() {
+        _patientResults = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      });
+    } catch (_) {
+      setState(() => _patientResults = []);
+    }
+    setState(() => _searchingPatients = false);
+  }
 
   Future<void> _selectDate(bool isFrom) async {
     final picked = await showDatePicker(
@@ -43,23 +74,60 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     }
   }
 
+  Map<String, String> _dateParams() {
+    final params = <String, String>{};
+    final from = _formatDate(_fromDate);
+    final to = _formatDate(_toDate);
+    if (from != null) params['date_from'] = from;
+    if (to != null) params['date_to'] = to;
+    return params;
+  }
+
   Future<void> _downloadReport() async {
+    if (_fromDate != null && _toDate != null && _fromDate!.isAfter(_toDate!)) {
+      showErrorSnackBar(context, AppLocalizations.tr('invalid_date_range'));
+      return;
+    }
     setState(() => _isLoading = true);
     try {
-      final params = <String, String>{};
-      final from = _formatDate(_fromDate);
-      final to = _formatDate(_toDate);
-      if (from != null) params['date_from'] = from;
-      if (to != null) params['date_to'] = to;
-
-      final filenames = {
-        'clinic-audit': 'clinic_audit_report.pdf',
-        'appointments': 'appointment_report.pdf',
-        'doctors': 'doctor_report.pdf',
-      };
+      final params = _dateParams();
+      String path;
+      String filename;
+      switch (_reportType) {
+        case 'staff':
+          path = '/reports/staff';
+          params['role'] = _staffRole;
+          filename = 'staff_$_staffRole';
+          break;
+        case 'patients':
+          path = '/reports/patients';
+          filename = 'patients_summary';
+          break;
+        case 'patient-detail':
+          final patientId = _selectedPatient?['profile_id']?.toString();
+          if (patientId == null || patientId.isEmpty) {
+            showErrorSnackBar(context, AppLocalizations.tr('select_patient'));
+            setState(() => _isLoading = false);
+            return;
+          }
+          path = '/reports/patient/$patientId';
+          filename = 'patient_care_report';
+          break;
+        case 'appointments':
+          path = '/reports/appointments';
+          filename = 'appointment_report';
+          break;
+        case 'doctors':
+          path = '/reports/doctors';
+          filename = 'doctor_report';
+          break;
+        default:
+          path = '/reports/clinic-audit';
+          filename = 'clinic_audit_report';
+      }
       await ReportDownloadService.download(
-        '/reports/$_reportType',
-        filename: filenames[_reportType] ?? 'report.pdf',
+        path,
+        filename: '$filename.$_exportFormat',
         queryParams: params.isEmpty ? null : params,
         format: _exportFormat,
       );
@@ -97,12 +165,56 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                     initialValue: _reportType,
                     decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
                     items: [
-                      DropdownMenuItem(value: 'clinic-audit', child: Text(AppLocalizations.tr('audit_report'))),
+                      DropdownMenuItem(value: 'clinic-audit', child: Text(AppLocalizations.tr('reception_report'))),
                       DropdownMenuItem(value: 'appointments', child: Text(AppLocalizations.tr('appointments'))),
                       DropdownMenuItem(value: 'doctors', child: Text(AppLocalizations.tr('doctors'))),
+                      DropdownMenuItem(value: 'patients', child: Text(AppLocalizations.tr('patients_summary_report'))),
+                      DropdownMenuItem(value: 'patient-detail', child: Text(AppLocalizations.tr('patient_care_report'))),
+                      DropdownMenuItem(value: 'staff', child: Text(AppLocalizations.tr('staff_report'))),
                     ],
                     onChanged: (v) => setState(() => _reportType = v!),
                   ),
+                  if (_reportType == 'staff') ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _staffRole,
+                      decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
+                      items: const [
+                        DropdownMenuItem(value: 'doctor', child: Text('Doctors')),
+                        DropdownMenuItem(value: 'patient', child: Text('Patients')),
+                        DropdownMenuItem(value: 'receptionist', child: Text('Receptionists')),
+                        DropdownMenuItem(value: 'admin', child: Text('Admins')),
+                      ],
+                      onChanged: (v) => setState(() => _staffRole = v ?? 'doctor'),
+                    ),
+                  ],
+                  if (_reportType == 'patient-detail') ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _patientSearchController,
+                      decoration: InputDecoration(
+                        hintText: AppLocalizations.tr('search_patient_hint'),
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        suffixIcon: _searchingPatients
+                            ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+                            : null,
+                      ),
+                      onChanged: _searchPatients,
+                    ),
+                    if (_patientResults.isNotEmpty)
+                      ..._patientResults.take(5).map((p) => ListTile(
+                            title: Text(p['name']?.toString() ?? 'Patient'),
+                            subtitle: Text(p['email']?.toString() ?? ''),
+                            selected: _selectedPatient?['profile_id'] == p['profile_id'],
+                            onTap: () => setState(() => _selectedPatient = p),
+                          )),
+                    if (_selectedPatient != null)
+                      Chip(
+                        label: Text(_selectedPatient!['name']?.toString() ?? 'Patient'),
+                        onDeleted: () => setState(() => _selectedPatient = null),
+                      ),
+                  ],
                   const SizedBox(height: 16),
                   Text(AppLocalizations.tr('export_format'), style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),

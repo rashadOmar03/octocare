@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/localization.dart';
 import '../../models/appointment.dart';
+import '../../widgets/receptionist_reschedule_dialog.dart';
 import '../../services/appointment_service.dart';
 import '../../services/admin_service.dart';
 import '../../widgets/bottom_nav.dart';
@@ -94,6 +95,11 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> with 
     }
   }
 
+  Future<void> _reschedule(Appointment apt) async {
+    final ok = await ReceptionistRescheduleDialog.show(context, apt);
+    if (ok == true) _loadData();
+  }
+
   void _showDetail(Appointment apt) {
     showModalBottomSheet(
       context: context,
@@ -116,6 +122,20 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> with 
             _row(ctx, AppLocalizations.tr('queue'), apt.queueNumber?.toString()),
             _row(ctx, AppLocalizations.tr('payments'), apt.isPaid ? AppLocalizations.tr('paid') : AppLocalizations.tr('unpaid')),
             if (apt.notes != null && apt.notes!.isNotEmpty) _row(ctx, AppLocalizations.tr('description'), apt.notes),
+            if (apt.status != 'completed' && apt.status != 'cancelled') ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _reschedule(apt);
+                  },
+                  icon: const Icon(Icons.event_repeat),
+                  label: Text(AppLocalizations.tr('reschedule')),
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -974,15 +974,18 @@ def doctor_report(
     export_fmt = _normalize_format(fmt)
 
     doctors = db.query(Doctor).all()
-    table_data = [["Name", "Specialty", "Qualifications", "Appointments"]]
+    from models import Specialty
+    from clinic_schedule import get_doctor_consultation_fee
+
+    table_data = [["Name", "Specialty", "Fee (EGP)", "Qualifications", "Appointments"]]
     for d in doctors:
         prof = db.query(Profile).filter(Profile.id == d.profile_id).first()
-        from models import Specialty
         spec = db.query(Specialty).filter(Specialty.id == d.specialty_id).first()
         apt_count = db.query(Appointment).filter(Appointment.doctor_id == d.id).count()
         table_data.append([
             f"Dr. {prof.first_name} {prof.last_name}" if prof else "N/A",
             spec.name if spec else "N/A",
+            str(get_doctor_consultation_fee(db, d)),
             d.qualifications or "N/A",
             str(apt_count),
         ])
@@ -1003,7 +1006,7 @@ def doctor_report(
         Spacer(1, 10),
         _build_table(
             table_data,
-            col_widths=[1.8 * inch, 1.3 * inch, 2 * inch, 1 * inch],
+            col_widths=[1.6 * inch, 1.2 * inch, 0.8 * inch, 1.6 * inch, 0.9 * inch],
             wrap_body=True,
         ),
     ]
@@ -1274,3 +1277,116 @@ def clinic_audit_report(
         onLaterPages=lambda c, d: _header_footer(c, d, clinic_name),
     )
     return _pdf_stream(buf, "clinic_audit_report.pdf")
+
+
+@router.get("/staff")
+def staff_report(
+    role: str | None = Query(None, description="Filter: doctor, patient, receptionist, admin"),
+    fmt: str = Query("pdf", alias="format"),
+    user: User = Depends(_get_report_user),
+    db: Session = Depends(get_db),
+):
+    """Staff directory report for admin (all roles or filtered)."""
+    _require_roles(user, "admin")
+    export_fmt = _normalize_format(fmt)
+
+    query = db.query(User)
+    if role:
+        query = query.filter(User.role == role.lower().strip())
+    users = query.order_by(User.role, User.email).all()
+
+    table_data = [["Role", "Name", "Email", "Phone", "Active", "Joined"]]
+    for u in users:
+        profile = db.query(Profile).filter(Profile.user_id == u.id).first()
+        name = _profile_display_name(db, profile.id) if profile else (u.email or "Staff")
+        table_data.append([
+            u.role,
+            name,
+            u.email or "-",
+            (profile.phone if profile and profile.phone else u.phone) or "-",
+            "Yes" if u.is_active else "No",
+            u.created_at.strftime("%Y-%m-%d") if u.created_at else "-",
+        ])
+
+    stem = f"staff_{role}" if role else "staff_all"
+    if export_fmt == "csv":
+        return stream_csv(table_data, f"{stem}.csv")
+    if export_fmt == "xlsx":
+        return stream_xlsx({"Staff": table_data}, f"{stem}.xlsx")
+
+    clinic_name = _get_clinic_name(db)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("Title2", parent=styles["Title"], fontSize=16, spaceAfter=12)
+    title = f"Staff Report — {role.title()}" if role else "Staff Report — All Roles"
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=70, bottomMargin=50)
+    elements = [
+        Paragraph(_escape_xml(title), title_style),
+        Spacer(1, 10),
+        _build_table(
+            table_data,
+            col_widths=[0.9 * inch, 1.6 * inch, 2.2 * inch, 1.1 * inch, 0.6 * inch, 0.9 * inch],
+            wrap_body=True,
+        ),
+    ]
+    doc.build(
+        elements,
+        onFirstPage=lambda c, d: _header_footer(c, d, clinic_name),
+        onLaterPages=lambda c, d: _header_footer(c, d, clinic_name),
+    )
+    return _pdf_stream(buf, f"{stem}.pdf")
+
+
+@router.get("/patients")
+def patients_summary_report(
+    fmt: str = Query("pdf", alias="format"),
+    user: User = Depends(_get_report_user),
+    db: Session = Depends(get_db),
+):
+    """All patients summary for admin."""
+    _require_roles(user, "admin", "receptionist")
+    export_fmt = _normalize_format(fmt)
+
+    patients = db.query(User).filter(User.role == "patient").order_by(User.email).all()
+    table_data = [["Name", "Email", "Phone", "Profile Complete", "Appointments"]]
+    for u in patients:
+        profile = db.query(Profile).filter(Profile.user_id == u.id).first()
+        name = f"{profile.first_name or ''} {profile.last_name or ''}".strip() if profile else u.email
+        apt_count = 0
+        if profile:
+            apt_count = db.query(Appointment).filter(Appointment.patient_id == profile.id).count()
+        table_data.append([
+            name or "-",
+            u.email or "-",
+            (profile.phone if profile else u.phone) or "-",
+            "Yes" if profile and profile.is_complete else "No",
+            str(apt_count),
+        ])
+
+    if export_fmt == "csv":
+        return stream_csv(table_data, "patients_summary.csv")
+    if export_fmt == "xlsx":
+        return stream_xlsx({"Patients": table_data}, "patients_summary.xlsx")
+
+    clinic_name = _get_clinic_name(db)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("Title2", parent=styles["Title"], fontSize=16, spaceAfter=12)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=70, bottomMargin=50)
+    elements = [
+        Paragraph("Patients Summary Report", title_style),
+        Spacer(1, 10),
+        _build_table(
+            table_data,
+            col_widths=[1.6 * inch, 2.2 * inch, 1.1 * inch, 1.0 * inch, 1.0 * inch],
+            wrap_body=True,
+        ),
+    ]
+    doc.build(
+        elements,
+        onFirstPage=lambda c, d: _header_footer(c, d, clinic_name),
+        onLaterPages=lambda c, d: _header_footer(c, d, clinic_name),
+    )
+    return _pdf_stream(buf, "patients_summary.pdf")

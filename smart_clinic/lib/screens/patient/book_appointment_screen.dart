@@ -25,6 +25,8 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   List<Map<String, dynamic>> _specialties = [];
   List<Doctor> _doctors = [];
   List<Map<String, dynamic>> _slots = [];
+  bool _doctorOnVacation = false;
+  String? _vacationReason;
 
   dynamic _selectedSpecialtyId;
   String? _selectedSpecialtyName;
@@ -109,9 +111,14 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     setState(() => _isLoading = true);
     try {
       final dateStr = '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}';
-      _slots = await _appointmentService.getAvailableSlots(_selectedDoctor!.id!, dateStr);
+      final result = await _appointmentService.fetchAvailableSlots(_selectedDoctor!.id!, dateStr);
+      _slots = (result['slots'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      _doctorOnVacation = result['doctor_on_vacation'] == true;
+      _vacationReason = result['vacation_reason']?.toString();
     } catch (_) {
       _slots = [];
+      _doctorOnVacation = false;
+      _vacationReason = null;
     }
     setState(() => _isLoading = false);
   }
@@ -407,6 +414,13 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(d.specialty ?? _selectedSpecialtyName ?? ''),
+                if (d.consultationFee != null)
+                  Text('${AppLocalizations.tr('consultation_fee')}: ${d.consultationFee!.toStringAsFixed(0)} EGP'),
+                if (d.onVacationToday == true)
+                  Text(
+                    AppLocalizations.tr('doctor_not_available_today'),
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
                 const SizedBox(height: 4),
                 _ratingLine(d),
               ],
@@ -471,6 +485,24 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   }
 
   Widget _buildTimeGrid() {
+    if (_doctorOnVacation) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Icon(Icons.beach_access, size: 48, color: Theme.of(context).colorScheme.error.withValues(alpha: 0.6)),
+            const SizedBox(height: 8),
+            Text(
+              _vacationReason?.isNotEmpty == true
+                  ? '${AppLocalizations.tr('doctor_on_vacation')}: $_vacationReason'
+                  : AppLocalizations.tr('doctor_on_vacation'),
+              style: Theme.of(context).textTheme.bodyLarge,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
     if (_slots.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(16),

@@ -11,6 +11,8 @@ class Doctor {
   final bool? isAvailable;
   final double? averageRating;
   final int? reviewCount;
+  final double? consultationFee;
+  final bool? onVacationToday;
 
   Doctor({
     this.id,
@@ -25,6 +27,8 @@ class Doctor {
     this.isAvailable,
     this.averageRating,
     this.reviewCount,
+    this.consultationFee,
+    this.onVacationToday,
   });
 
   factory Doctor.fromJson(Map<String, dynamic> json) {
@@ -41,6 +45,8 @@ class Doctor {
       isAvailable: json['is_available'],
       averageRating: json['average_rating'] == null ? null : (json['average_rating'] as num).toDouble(),
       reviewCount: json['review_count'] is int ? json['review_count'] : int.tryParse(json['review_count']?.toString() ?? ''),
+      consultationFee: json['consultation_fee'] == null ? null : (json['consultation_fee'] as num).toDouble(),
+      onVacationToday: json['on_vacation_today'] == true,
     );
   }
 

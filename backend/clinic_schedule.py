@@ -10,7 +10,7 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
-from models import ClinicSettings, Doctor, DoctorSchedule
+from models import ClinicSettings, Doctor, DoctorSchedule, DoctorTimeOff
 
 # Sat(5), Sun(6), Mon(0), Tue(1), Wed(2), Thu(3) — Friday(4) off
 DEFAULT_WORKING_DAYS: tuple[int, ...] = (5, 6, 0, 1, 2, 3)
@@ -138,4 +138,70 @@ def ensure_doctor_schedules(db: Session, doctor_ids: list[str] | None = None) ->
                 changed += 1
     if changed:
         db.commit()
+    return changed
+
+
+def get_doctor_consultation_fee(db: Session, doctor: Doctor) -> float:
+    if doctor.consultation_fee is not None:
+        return float(doctor.consultation_fee)
+    settings = db.query(ClinicSettings).first()
+    return float(settings.default_fee) if settings and settings.default_fee is not None else 0.0
+
+
+def is_doctor_on_vacation(db: Session, doctor_id: str, check_date: date) -> bool:
+    row = (
+        db.query(DoctorTimeOff)
+        .filter(
+            DoctorTimeOff.doctor_id == doctor_id,
+            DoctorTimeOff.start_date <= check_date,
+            DoctorTimeOff.end_date >= check_date,
+        )
+        .first()
+    )
+    return row is not None
+
+
+def get_doctor_vacation_on_date(db: Session, doctor_id: str, check_date: date) -> DoctorTimeOff | None:
+    return (
+        db.query(DoctorTimeOff)
+        .filter(
+            DoctorTimeOff.doctor_id == doctor_id,
+            DoctorTimeOff.start_date <= check_date,
+            DoctorTimeOff.end_date >= check_date,
+        )
+        .first()
+    )
+
+
+def sync_doctor_weekly_hours(
+    db: Session,
+    doctor_id: str,
+    start_time: str,
+    end_time: str,
+) -> int:
+    """Update start/end for all weekly schedule rows of a doctor."""
+    rows = db.query(DoctorSchedule).filter(DoctorSchedule.doctor_id == doctor_id).all()
+    changed = 0
+    for row in rows:
+        if row.start_time != start_time or row.end_time != end_time:
+            row.start_time = start_time
+            row.end_time = end_time
+            changed += 1
+    if changed:
+        db.commit()
+    return changed
+
+
+def sync_all_doctors_hours_from_clinic(db: Session, settings: ClinicSettings) -> int:
+    """Apply clinic default hours to every doctor schedule row."""
+    if not settings:
+        return 0
+    changed = 0
+    for doctor in db.query(Doctor).all():
+        changed += sync_doctor_weekly_hours(
+            db,
+            doctor.id,
+            settings.working_hours_start,
+            settings.working_hours_end,
+        )
     return changed
