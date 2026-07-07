@@ -65,7 +65,7 @@ class Appointment {
       notes: json['notes'],
       queueNumber: json['queue_number'] is int ? json['queue_number'] : int.tryParse(json['queue_number']?.toString() ?? ''),
       createdAt: json['created_at']?.toString(),
-      isPaid: json['is_paid'] == true,
+      isPaid: json['is_paid'] == true || json['payment_status'] == 'paid',
       paymentStatus: json['payment_status']?.toString(),
       needsPayment: json['needs_payment'] == true || json['payment_status'] == 'refunded',
       medicalRecordId: json['medical_record_id']?.toString(),

@@ -6,7 +6,7 @@ import '../services/appointment_service.dart';
 import '../l10n/localization.dart';
 import 'ui_helpers.dart';
 
-Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointment) async {
+  Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointment) async {
   final appointmentService = AppointmentService();
 
   Future<Appointment> freshAppointment(Appointment apt) async {
@@ -20,6 +20,9 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
       return apt;
     }
   }
+
+  bool isReadyForConsultation(Appointment apt) =>
+      apt.isConsultationEditable || (apt.status == 'arrived' && apt.isPaid);
 
   if (appointment.status == 'completed' || appointment.isConsultationEditOnly) {
     final apt = await freshAppointment(appointment);
@@ -35,14 +38,24 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
   if (appointment.canDoctorStartConsultation) {
     try {
       var apt = await freshAppointment(appointment);
-      if (!apt.isConsultationEditable && apt.id != null) {
-        apt = await appointmentService.startConsultation(apt.id!);
+      if (!isReadyForConsultation(apt) && apt.id != null) {
+        try {
+          apt = await appointmentService.startConsultation(apt.id!);
+        } catch (_) {
+          if (isReadyForConsultation(appointment)) {
+            apt = appointment;
+          } else if (isReadyForConsultation(apt)) {
+            // keep refreshed apt
+          } else {
+            rethrow;
+          }
+        }
       }
       if (!context.mounted) return false;
       return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
     } catch (e) {
       if (context.mounted) {
-        final message = e.toString().contains('payment')
+        final message = e.toString().toLowerCase().contains('payment')
             ? AppLocalizations.tr('payment_required_consultation')
             : AppLocalizations.tr('consultation_not_available');
         showErrorSnackBar(context, message);
