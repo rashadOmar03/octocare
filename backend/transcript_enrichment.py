@@ -183,11 +183,9 @@ def _apply_label(template: str, match: re.Match[str] | None) -> str:
 
 
 def safe_enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[str, Any]:
-    """Safe gap-fill: PMH/allergies/plan only. No diagnosis inference, no hardcoded drug lists."""
+    """Minimal gap-fill: PMH/allergies/plan only when explicitly matched in text. No symptom/exam inference."""
     if not (transcript or "").strip():
         return data
-
-    from medical_extraction import _filter_negated_symptoms, _symptom_is_negated
 
     lang = _output_lang(data)
     text = transcript
@@ -199,6 +197,8 @@ def safe_enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[s
         m = re.search(pattern, text, re.I)
         if not m:
             continue
+        if _is_negated_near(text, m.start(), m.end()):
+            continue
         label = _apply_label(_localized(lang, en_label, ar_label), m)
         ctx = _snippet(text, m.start(), m.end())
         if _detect_temporality(ctx) == Temporality.FAMILY_HISTORY:
@@ -209,7 +209,10 @@ def safe_enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[s
             _append_unique(pmh, label)
 
     for pattern, ar_label, en_label in _ALLERGY_PATTERNS:
-        if not re.search(pattern, text, re.I):
+        m = re.search(pattern, text, re.I)
+        if not m:
+            continue
+        if _is_negated_near(text, m.start(), m.end()):
             continue
         label = _localized(lang, en_label, ar_label)
         if label == "—SKIP—":
@@ -220,28 +223,6 @@ def safe_enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[s
     mh["allergies"] = _dedupe_strings(allergies)
     data["medical_history"] = mh
 
-    for pattern, ar_name, en_name, ar_dur, en_dur in _SYMPTOM_RULES:
-        m = re.search(pattern, text, re.I)
-        if not m:
-            continue
-        name = _localized(lang, en_name, ar_name)
-        if _symptom_is_negated(name, text):
-            continue
-        ctx = _snippet(text, m.start(), m.end())
-        if _detect_temporality(ctx) == Temporality.FAMILY_HISTORY:
-            continue
-        duration = _localized(lang, en_dur or "", ar_dur or "") or None if (ar_dur or en_dur) else None
-        _append_symptom(data, name, duration)
-
-    data["symptoms"] = normalize_symptoms(data.get("symptoms", []))
-    if source_text := text:
-        data["symptoms"] = _filter_negated_symptoms(data.get("symptoms") or [], source_text)
-
-    if not (data.get("chief_complaint") or "").strip():
-        names = _symptom_names(data)
-        if names:
-            data["chief_complaint"] = names[0]
-
     soap = data.get("soap_note") or {}
     plan = _as_str_list(soap.get("plan"))
     follow = _as_str_list(data.get("follow_up_items"))
@@ -249,16 +230,13 @@ def safe_enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[s
         m = re.search(pattern, text, re.I)
         if not m:
             continue
+        if _is_negated_near(text, m.start(), m.end()):
+            continue
         item = _localized(lang, en_item, ar_item)
         if _detect_temporality(_snippet(text, m.start(), m.end())) == Temporality.PLANNED:
             _append_unique(follow, item)
         else:
             _append_unique(plan, item)
-
-    for pattern, ar_finding, en_finding in _EXAM_PATTERNS:
-        m = re.search(pattern, text, re.I)
-        if m and not _is_negated_near(text, m.start(), m.end()):
-            _append_objective(data, "physical_exam", _localized(lang, en_finding, ar_finding))
 
     if isinstance(data.get("soap_note"), dict):
         data["soap_note"]["plan"] = _dedupe_strings(plan)

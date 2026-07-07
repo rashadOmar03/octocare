@@ -45,11 +45,13 @@ Return ONE valid JSON object ONLY:
 
 RULES:
 - Answer the physician's specific question first in message (yes/no/partial + explanation).
-- If they ask about prescription/plan/diagnosis/missing items, focus on that.
-- suggestions = ONLY items the physician may want to ADD (not auto-applied).
+- suggestions = ONLY items the physician may want to ADD — never auto-applied.
+- Every suggestion MUST include source_snippet that is a verbatim or near-verbatim quote from the transcript.
+- If there is no clear quote in the transcript, do NOT suggest that item.
+- NEVER suggest items because something "might" have been said or to fill gaps in messy audio.
 - No duplicates of data already in extraction.
 - Understand Egyptian Arabic.
-- If nothing to add, suggestions = [] but still answer the question in message."""
+- If nothing to add with transcript evidence, suggestions = [] but still answer the question in message."""
 
 
 def _parse_review_json(text: str) -> dict[str, Any]:
@@ -91,7 +93,28 @@ def _flatten_extracted_values(data: dict[str, Any]) -> set[str]:
     return keys
 
 
-def _already_present(value: str, existing: set[str]) -> bool:
+def _snippet_in_transcript(snippet: str, transcript: str) -> bool:
+    """True when snippet text is clearly present in transcript (no inference)."""
+    snippet = (snippet or "").strip()
+    if not snippet or not transcript:
+        return False
+    if snippet.lower() in transcript.lower():
+        return True
+    words = [w for w in re.split(r"\s+", snippet.lower()) if len(w) > 2]
+    blob = transcript.lower()
+    return len(words) >= 2 and all(w in blob for w in words[: min(4, len(words))])
+
+
+def _filter_suggestions_with_evidence(
+    suggestions: list[dict[str, Any]], transcript: str
+) -> list[dict[str, Any]]:
+    """Drop suggestions that cannot be tied to text in the transcript."""
+    out: list[dict[str, Any]] = []
+    for s in suggestions:
+        snippet = (s.get("source_snippet") or s.get("suggested_value") or "").strip()
+        if _snippet_in_transcript(snippet, transcript):
+            out.append(s)
+    return out
     key = _norm_key(value)
     if not key or key in existing:
         return True
@@ -212,6 +235,8 @@ def _heuristic_prompt_review(
             )
             answer = "yes"
             for name in missing_meds:
+                if not _snippet_in_transcript(name, transcript):
+                    continue
                 suggestions.append({
                     "category": "prescription",
                     "field": "prescription",
@@ -250,14 +275,19 @@ def _heuristic_prompt_review(
             )
             answer = "no"
             for m in enriched_rx:
-                if isinstance(m, dict) and not _already_present(m.get("name", ""), _flatten_extracted_values(extracted)):
+                name = m.get("name", "") if isinstance(m, dict) else str(m)
+                if (
+                    name
+                    and _snippet_in_transcript(name, transcript)
+                    and not _already_present(name, _flatten_extracted_values(extracted))
+                ):
                     suggestions.append({
                         "category": "prescription",
                         "field": "prescription",
-                        "suggested_value": m.get("name", ""),
+                        "suggested_value": name,
                         "confidence": 0.82,
-                        "explanation": "Medication mentioned in transcript but not in prescription list.",
-                        "source_snippet": m.get("name", ""),
+                        "explanation": "Medication name appears in transcript but not in prescription list.",
+                        "source_snippet": name,
                     })
         else:
             message = "لا — لا توجد وصفة في الاستخراج ولا يبدو أن المحادثة تصف أدوية جديدة." if is_ar else "No — no prescription found in extraction or transcript."
@@ -269,16 +299,16 @@ def _heuristic_prompt_review(
             message = f"نعم — الخطة تحتوي {len(plan)} بند(اً)." if is_ar else f"Yes — plan has {len(plan)} item(s)."
             answer = "yes"
         elif enriched_plan:
-            message = "لا — الخطة فارغة لكن المحادثة تذكر إجراءات (echo، labs، إلخ)." if is_ar else "No — plan is empty but transcript suggests management steps."
+            message = "لا — الخطة فارغة." if is_ar else "No — plan section is empty."
             answer = "no"
             for p in enriched_plan:
-                if not _already_present(p, _flatten_extracted_values(extracted)):
+                if _snippet_in_transcript(p, transcript) and not _already_present(p, _flatten_extracted_values(extracted)):
                     suggestions.append({
                         "category": "plan",
                         "field": "soap_note.plan",
                         "suggested_value": p,
                         "confidence": 0.8,
-                        "explanation": "Management step inferred from transcript.",
+                        "explanation": "Plan item quoted in transcript.",
                         "source_snippet": p,
                     })
         else:
@@ -290,64 +320,17 @@ def _heuristic_prompt_review(
         if has_dx:
             message = f"نعم — {len(diagnoses)} تشخيص(ات): {', '.join(diagnoses[:3])}." if is_ar else f"Yes — {len(diagnoses)} diagnosis(es) documented."
             answer = "yes"
-        elif enriched_dx:
-            message = "لا — التشخيص فارغ لكن يمكن استنتاج تشخيصات من الأعراض والتاريخ." if is_ar else "No — diagnosis empty but clinical inference possible."
-            answer = "no"
-            for d in enriched_dx:
-                if not _already_present(d, _flatten_extracted_values(extracted)):
-                    suggestions.append({
-                        "category": "diagnoses",
-                        "field": "diagnoses",
-                        "suggested_value": d,
-                        "confidence": 0.75,
-                        "explanation": "Clinical inference from symptoms and history.",
-                        "source_snippet": d,
-                    })
         else:
-            message = "لا — لا توجد تشخيصات." if is_ar else "No diagnoses in extraction."
+            message = "لا — لا توجد تشخيصات في الاستخراج." if is_ar else "No diagnoses in extraction."
             answer = "no"
 
     elif asks_missing:
-        message = "راجع الاقتراحات أدناه — قد تكون ناقصة من الاستخراج." if is_ar else "See suggestions below for possible missing items."
+        message = (
+            "لا أضيف عناصر تلقائياً — راجع الاستخراج مقابل المحادثة يدوياً."
+            if is_ar else
+            "Missing items are not auto-suggested — compare extraction to the transcript manually."
+        )
         answer = "partial"
-        full = enrich_from_transcript(dict(extracted), transcript)
-        existing = _flatten_extracted_values(extracted)
-        for s in full.get("symptoms") or []:
-            if isinstance(s, dict):
-                name = s.get("name", "")
-                if name and not _already_present(name, existing):
-                    suggestions.append({
-                        "category": "symptoms",
-                        "field": "symptoms",
-                        "suggested_value": name,
-                        "confidence": 0.77,
-                        "explanation": "Symptom in transcript not in extraction.",
-                        "source_snippet": name,
-                    })
-        for d in _as_str_list(full.get("diagnoses")):
-            if not _already_present(d, existing):
-                suggestions.append({
-                    "category": "diagnoses",
-                    "field": "diagnoses",
-                    "suggested_value": d,
-                    "confidence": 0.74,
-                    "explanation": "Possible diagnosis from transcript.",
-                    "source_snippet": d,
-                })
-        mh = full.get("medical_history") or {}
-        for p in _as_str_list(mh.get("past_medical_history")):
-            if not _already_present(p, existing):
-                suggestions.append({
-                    "category": "medical_history",
-                    "field": "medical_history.past_medical_history",
-                    "suggested_value": p,
-                    "confidence": 0.85,
-                    "explanation": "Past medical history in transcript.",
-                    "source_snippet": p,
-                })
-        if not suggestions:
-            message = "لا أرى معلومات مهمة ناقصة — الاستخراج يبدو مكتملاً نسبياً." if is_ar else "No major missing items detected."
-            answer = "yes"
     else:
         message = (
             "أجب على سؤالك بناءً على الاستخراج. اسأل مثلاً: هل يوجد وصفة؟ هل الخطة كاملة؟ ما الناقص؟"
@@ -358,6 +341,7 @@ def _heuristic_prompt_review(
 
     existing = _flatten_extracted_values(extracted)
     filtered = [s for s in suggestions if not _already_present(s["suggested_value"], existing)]
+    filtered = _filter_suggestions_with_evidence(filtered, transcript)
 
     return {
         "answer": answer,
@@ -379,7 +363,13 @@ def run_extraction_review(
     prompt = (doctor_prompt or "").strip()
 
     if not prompt:
-        prompt = "Analyze the extraction and tell me what important information is missing."
+        return {
+            "answer": "no",
+            "message": "Please enter a question about the extraction.",
+            "suggestions": [],
+            "language_detected": _output_lang(normalized),
+            "review_count": 0,
+        }
 
     if call_model:
         user_msg = (
@@ -395,6 +385,7 @@ def run_extraction_review(
                 suggestions = _normalize_suggestions(parsed.get("suggestions") or [])
                 existing = _flatten_extracted_values(normalized)
                 filtered = [s for s in suggestions if not _already_present(s["suggested_value"], existing)]
+                filtered = _filter_suggestions_with_evidence(filtered, transcript)
                 return {
                     "answer": parsed.get("answer") or "partial",
                     "message": (parsed.get("message") or "").strip(),

@@ -885,7 +885,11 @@ async def extract_medical_info(
     if extracted is None:
         extracted = mock_extraction_for_language("ar" if lang in ("ar", "mixed") else "en")
 
-    response = build_api_response(extracted, source, source_text=transcript)
+    def _verify_call(system: str, user: str) -> str | None:
+        return _call_model(system, user, temperature=0, max_tokens=2048, json_mode=True)
+
+    verify = _verify_call if source == "lm_studio" else None
+    response = build_api_response(extracted, source, source_text=transcript, verify_call=verify)
     if source == "mock":
         response["source"] = "mock"
         response["warning"] = "AI model offline — this is placeholder data, not real analysis"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, Callable
 
 EXTRACTION_SYSTEM_PROMPT = """You are an expert clinical documentation specialist and medical NLP system.
 
@@ -15,8 +15,9 @@ Return ONE valid JSON object ONLY. No markdown. No explanations.
 
 RULES:
 - Do NOT copy long paragraphs into SOAP sections. Summarize professionally like a hospital EHR.
-- Extract EVERY POSITIVE symptom mentioned, including implied/clinical terms (synonyms, abbreviations expanded).
-- CRITICAL — NEGATION HANDLING: Words like "no", "denies", "negative", "without", "absent", "ruled out", "لا", "مفيش", "بدون" NEGATE the symptom that follows. NEVER add negated symptoms to the symptoms array. Examples: "no fever" → do NOT add fever; "denies cough" → do NOT add cough; "no vomiting" → do NOT add vomiting. Only list them as pertinent negatives in objective if clinically useful.
+- Extract EVERY POSITIVE symptom explicitly mentioned or clearly paraphrased from the source — not guessed.
+- CRITICAL — OMISSION OVER GUESSING: If audio/text is messy, unclear, or something was not clearly said, LEAVE THE FIELD EMPTY. Never invent symptoms, diagnoses, medications, or findings to fill gaps.
+- CRITICAL — NEGATION HANDLING: Words like "no", "denies", "negative", "without", "absent", "ruled out", "لا", "مفيش", "بدون" NEGATE the symptom that follows. NEVER add negated symptoms to the symptoms array.
 - Do NOT infer diagnoses from symptoms, medications, tests ordered, or family history. Only include diagnoses explicitly documented by the clinician (including suspected/possible/rule-out with certainty preserved).
 - Tag family history separately in medical_history.family_history — never as patient diagnoses or symptoms.
 - Mark old/previous records and prior medication lists as historical — do not place them in current medications.
@@ -1106,7 +1107,11 @@ def _filter_negated_symptoms(symptoms: list[dict[str, Any]], source_text: str) -
     return [s for s in symptoms if not _symptom_is_negated(s.get("name", ""), source_text)]
 
 
-def normalize_extraction(raw: dict[str, Any], source_text: str | None = None) -> dict[str, Any]:
+def normalize_extraction(
+    raw: dict[str, Any],
+    source_text: str | None = None,
+    verify_call: Callable[[str, str], str | None] | None = None,
+) -> dict[str, Any]:
     """Normalize LLM output into consistent structured EHR payload."""
     data = dict(raw or {})
     lang = _resolve_output_language(data, source_text)
@@ -1168,6 +1173,14 @@ def normalize_extraction(raw: dict[str, Any], source_text: str | None = None) ->
             data = _clean_subjective_section(data)
     from extraction_pipeline import run_extraction_pipeline
     data, validation = run_extraction_pipeline(data, source_text)
+    if verify_call and source_text and source_text.strip():
+        from extraction_verify import run_verify_pass
+        data, verify_report = run_verify_pass(data, source_text, verify_call)
+        data["verification_pass"] = verify_report
+        if verify_report.get("removed"):
+            data, validation = run_extraction_pipeline(data, source_text)
+            data["verification_pass"] = verify_report
+            data["validation_report"] = validation
     if not data.get("clinical_findings"):
         data["clinical_findings"] = _build_clinical_findings(data)
     return data
@@ -1217,7 +1230,7 @@ def _ensure_soap_sections(data: dict[str, Any]) -> dict[str, Any]:
 
     assessment = soap.get("assessment")
     if not assessment or (isinstance(assessment, list) and len(assessment) == 0):
-        soap["assessment"] = list(data.get("diagnoses") or []) or [_localized(lang, "Pending clinical assessment", "بانتظار التقييم السريري")]
+        soap["assessment"] = list(data.get("diagnoses") or [])
 
     plan = soap.get("plan")
     if not plan or (isinstance(plan, list) and len(plan) == 0):
@@ -1227,7 +1240,7 @@ def _ensure_soap_sections(data: dict[str, Any]) -> dict[str, Any]:
             plan_items.extend(str(x).strip() for x in tp if str(x).strip())
         elif isinstance(tp, str) and tp.strip():
             plan_items.append(tp.strip())
-        soap["plan"] = _dedupe_strings(plan_items) or [_localized(lang, "Complete physician review", "إكمال مراجعة الطبيب")]
+        soap["plan"] = _dedupe_strings(plan_items)
 
     obj = soap.get("objective")
     if not isinstance(obj, dict):
@@ -1267,9 +1280,14 @@ def _as_str_list(value: Any) -> list[str]:
     return [str(value).strip()]
 
 
-def build_api_response(extracted: dict[str, Any], source: str, source_text: str | None = None) -> dict[str, Any]:
+def build_api_response(
+    extracted: dict[str, Any],
+    source: str,
+    source_text: str | None = None,
+    verify_call: Callable[[str, str], str | None] | None = None,
+) -> dict[str, Any]:
     """Flatten structured data for API + legacy text fields."""
-    data = normalize_extraction(extracted, source_text=source_text)
+    data = normalize_extraction(extracted, source_text=source_text, verify_call=verify_call)
     lang = _output_lang(data)
     soap = data.get("soap_note") or {}
     objective = soap.get("objective") if isinstance(soap.get("objective"), dict) else {}
@@ -1290,6 +1308,7 @@ def build_api_response(extracted: dict[str, Any], source: str, source_text: str 
         "diagnoses": diagnoses,
         "severity": data.get("severity") or "undetermined",
         "validation_report": data.get("validation_report") or {},
+        "verification_pass": data.get("verification_pass") or {},
         "vitals_source": data.get("vitals_source") or "sensor",
         "treatment_plan": _list_to_bullets(plan_items),
         "plan_list": plan_items,
