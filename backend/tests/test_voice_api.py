@@ -220,12 +220,15 @@ def test_transcribe_empty_speech_returns_422(mock_transcribe, auth_as):
 
 
 def test_whisper_hallucination_you_on_short_audio():
-    from voice_service import _is_low_quality_transcript
+    from voice_service import _is_low_quality_transcript, _is_garbage_transcript
 
     assert _is_low_quality_transcript("you", 1500) is True
     assert _is_low_quality_transcript("thank you", 1500) is True
     assert _is_low_quality_transcript("I have chest pain", 2000) is False
     assert _is_low_quality_transcript("you", 20000) is False
+    assert _is_garbage_transcript("Paternity or Pregnant", requested_lang="ar", audio_bytes=8000) is True
+    assert _is_garbage_transcript("اهلا عندي كام مريض", requested_lang="ar", audio_bytes=8000) is False
+    assert _is_garbage_transcript("How many patients", requested_lang="en", audio_bytes=8000) is False
 
 
 @patch("routers.ai_router._call_model")

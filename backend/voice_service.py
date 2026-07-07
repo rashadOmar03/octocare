@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import tempfile
 from typing import Literal
 
@@ -25,13 +26,84 @@ VOICE_MAP = {
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "") or os.getenv("LM_API_KEY", "")
 GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3")
 
-# Whisper often hallucinates these on silence or very short English clips only.
+# Whisper often hallucinates these on silence or noisy clips.
 _WHISPER_HALLUCINATIONS = frozenset({
     "you", "you.", "thank you", "thank you.", "thanks", "thanks.",
     "thanks for watching", "thank you for watching",
     "subscribe", "bye", "bye bye", "the end",
     "...", "mm", "hmm", "uh", "um", "okay", "ok",
 })
+
+# Random English phrases Whisper invents on Arabic/silent audio — always reject.
+_WHISPER_ENGLISH_GARBAGE = frozenset({
+    "paternity or pregnant",
+    "paternity",
+    "pregnant",
+    "subtitles by the amara.org community",
+    "subtitles by amara.org",
+    "www.amara.org",
+    "copyright",
+    "all rights reserved",
+    "please subscribe",
+    "like and subscribe",
+    "silence",
+    "music",
+    "applause",
+})
+
+_ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
+_LATIN_RE = re.compile(r"[A-Za-z]")
+
+
+def _contains_arabic(text: str) -> bool:
+    return bool(_ARABIC_RE.search(text or ""))
+
+
+def _latin_ratio(text: str) -> float:
+    if not text:
+        return 0.0
+    letters = sum(1 for ch in text if ch.isalpha())
+    if letters == 0:
+        return 0.0
+    latin = len(_LATIN_RE.findall(text))
+    return latin / letters
+
+
+def _prompt_for_language(lang: str | None) -> str:
+    if lang == "ar":
+        return "محادثة عيادة طبية بالعربية. مريض، موعد، طبيب، است reception، عدد المرضى."
+    if lang == "en":
+        return "Medical clinic conversation in English. Patient appointment doctor reception."
+    return "Medical clinic. Arabic or English."
+
+
+def _is_garbage_transcript(transcript: str, *, requested_lang: str | None, audio_bytes: bytes | int) -> bool:
+    cleaned = (transcript or "").strip()
+    if not cleaned:
+        return True
+
+    lowered = cleaned.lower().rstrip(".,!?")
+    size = audio_bytes if isinstance(audio_bytes, int) else len(audio_bytes)
+
+    if lowered in _WHISPER_HALLUCINATIONS and size < 4000:
+        return True
+    if lowered in _WHISPER_ENGLISH_GARBAGE:
+        return True
+    for phrase in _WHISPER_ENGLISH_GARBAGE:
+        if phrase in lowered and len(lowered) < 80:
+            return True
+
+    # User spoke Arabic (UI language ar) but Whisper returned English-only nonsense.
+    if requested_lang == "ar":
+        if not _contains_arabic(cleaned) and _latin_ratio(cleaned) > 0.85:
+            # Allow short Latin tokens only if they look like real clinic terms with digits.
+            if not re.search(r"\d", cleaned):
+                return True
+
+    if _is_low_quality_transcript(cleaned, audio_bytes):
+        return True
+
+    return False
 
 
 def _mime_for_suffix(suffix: str) -> str:
@@ -46,13 +118,13 @@ def _mime_for_suffix(suffix: str) -> str:
 
 
 def _is_low_quality_transcript(transcript: str, audio_bytes: bytes | int) -> bool:
-    """True only for obvious English silence hallucinations on tiny clips."""
+    """True only for obvious single-word English silence hallucinations."""
     cleaned = (transcript or "").strip().lower().rstrip(".,!?")
     if not cleaned:
         return True
     size = audio_bytes if isinstance(audio_bytes, int) else len(audio_bytes)
     word_count = len(cleaned.split())
-    if cleaned in _WHISPER_HALLUCINATIONS and size < 3000:
+    if cleaned in _WHISPER_HALLUCINATIONS and size < 4000:
         return True
     if word_count >= 2:
         return False
@@ -116,7 +188,7 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
                     "temperature": "0",
                 }
                 if use_prompt:
-                    data["prompt"] = "Medical clinic. Patient or staff speaking Arabic or English."
+                    data["prompt"] = _prompt_for_language(lang or language)
                 if lang in ("ar", "en"):
                     data["language"] = lang
 
@@ -129,12 +201,12 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
                 )
 
             if resp.status_code != 200:
-                return {"transcript": "", "language": lang or "en", "error": resp.text[:300]}
+                return {"transcript": "", "language": lang or language or "en", "error": resp.text[:300]}
 
             body = resp.json()
             transcript = (body.get("text") or "").strip()
-            detected = _normalize_language(body.get("language"), fallback=lang or "en")
-            if _is_low_quality_transcript(transcript, audio_bytes):
+            detected = _normalize_language(body.get("language"), fallback=lang or language or "en")
+            if _is_garbage_transcript(transcript, requested_lang=language, audio_bytes=audio_bytes):
                 transcript = ""
             return {
                 "transcript": transcript,
@@ -147,15 +219,22 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
             except OSError:
                 pass
 
-    attempts: list[tuple[str | None, bool]] = [
-        (language, True),
-        (language, False),
-        (None, False),
-    ]
+    # Never fall back to English when the user interface is Arabic — that causes hallucinations.
     if language == "ar":
-        attempts.append(("en", False))
+        attempts: list[tuple[str | None, bool]] = [
+            ("ar", True),
+            ("ar", False),
+        ]
     elif language == "en":
-        attempts.append(("ar", False))
+        attempts = [
+            ("en", True),
+            ("en", False),
+        ]
+    else:
+        attempts = [
+            (None, True),
+            (None, False),
+        ]
 
     last: dict = {"transcript": "", "language": language or "en", "model": f"groq-{GROQ_WHISPER_MODEL}"}
     for lang, use_prompt in attempts:
@@ -225,6 +304,8 @@ def transcribe_file(
     with open(file_path, "rb") as f:
         raw = f.read()
     if _is_low_quality_transcript(transcript, raw):
+        transcript = ""
+    if _is_garbage_transcript(transcript, requested_lang=language, audio_bytes=raw):
         transcript = ""
     return {
         "transcript": transcript,

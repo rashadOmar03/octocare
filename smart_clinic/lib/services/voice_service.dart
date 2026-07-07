@@ -6,6 +6,34 @@ import 'api_service.dart';
 import 'voice_platform.dart';
 import '../l10n/localization.dart';
 
+final _arabicScript = RegExp(r'[\u0600-\u06FF]');
+final _latinLetters = RegExp(r'[A-Za-z]');
+
+const _englishGarbagePhrases = {
+  'paternity or pregnant',
+  'paternity',
+  'pregnant',
+  'thank you for watching',
+  'thanks for watching',
+  'like and subscribe',
+  'subtitles by the amara.org community',
+};
+
+bool _looksLikeArabicUiGarbageEnglish(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return true;
+  final lower = trimmed.toLowerCase();
+  if (_englishGarbagePhrases.contains(lower)) return true;
+  for (final phrase in _englishGarbagePhrases) {
+    if (lower.contains(phrase) && lower.length < 80) return true;
+  }
+  if (_arabicScript.hasMatch(trimmed)) return false;
+  final latinCount = _latinLetters.allMatches(trimmed).length;
+  final letterCount = trimmed.replaceAll(RegExp(r'[^A-Za-z\u0600-\u06FF]'), '').length;
+  if (letterCount == 0) return true;
+  return latinCount / letterCount > 0.85;
+}
+
 class VoiceService {
   VoiceService._();
   static final VoiceService instance = VoiceService._();
@@ -73,6 +101,14 @@ class VoiceService {
         'Could not detect speech. Speak clearly in Arabic or English for 2–3 seconds, then tap stop.',
       );
     }
+
+    if (lang == 'ar' && _looksLikeArabicUiGarbageEnglish(transcript)) {
+      throw Exception(
+        'Voice was not recognized in Arabic. Speak clearly in Arabic for 2–3 seconds, then tap stop. '
+        'Check that your app language is Arabic and the microphone is not muted.',
+      );
+    }
+
     return transcript;
   }
 

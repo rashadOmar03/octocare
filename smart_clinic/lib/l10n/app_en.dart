@@ -524,6 +524,7 @@ class AppStringsEn {
     'voice_transcribing': 'Transcribing…',
     'voice_sending': 'Sending message…',
     'voice_hold_longer': 'Keep speaking… tap stop when finished (at least 2 seconds)',
+    'voice_review_before_send': 'Voice text added — review it, then tap Send',
     'leave_review': 'Leave review',
     'submit_review': 'Submit review',
     'review_submitted': 'Thank you! Your review was saved.',

@@ -133,10 +133,6 @@ class _AiChatPanelState extends State<AiChatPanel> {
     await _sendMessageWithText(_messageController.text);
   }
 
-  Future<void> _sendVoiceMessage(String text) async {
-    await _sendMessageWithText(text);
-  }
-
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
@@ -237,7 +233,15 @@ class _AiChatPanelState extends State<AiChatPanel> {
             children: [
               VoiceMicButton(
                 controller: _messageController,
-                onAutoSend: _sendVoiceMessage,
+                onTranscribed: () {
+                  if (mounted) setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(AppLocalizations.tr('voice_review_before_send')),
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                },
               ),
               Expanded(
                 child: TextField(

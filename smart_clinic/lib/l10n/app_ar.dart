@@ -524,6 +524,7 @@ class AppStringsAr {
     'voice_transcribing': 'جاري تحويل الصوت…',
     'voice_sending': 'جاري إرسال الرسالة…',
     'voice_hold_longer': 'استمر بالتحدث… اضغط إيقاف عند الانتهاء (ثانيتان على الأقل)',
+    'voice_review_before_send': 'تمت إضافة النص — راجعه ثم اضغط إرسال',
     'leave_review': 'اترك تقييماً',
     'submit_review': 'إرسال التقييم',
     'review_submitted': 'شكراً! تم حفظ تقييمك.',
