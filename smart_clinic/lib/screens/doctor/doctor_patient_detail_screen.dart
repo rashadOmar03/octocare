@@ -14,6 +14,7 @@ import '../../widgets/loading_widget.dart';
 import '../../widgets/empty_state.dart';
 import '../../services/report_download_service.dart';
 import '../../widgets/sensor_waveform_chart.dart';
+import '../../widgets/user_avatar.dart';
 import '../../utils/ui_helpers.dart';
 
 class DoctorPatientDetailScreen extends StatefulWidget {
@@ -442,10 +443,12 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        CircleAvatar(
+                        UserAvatar(
+                          name: name,
+                          photoUrl: profile?['photo_url']?.toString(),
+                          patientId: _patientId,
                           radius: 30,
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          child: Text(name.isNotEmpty ? name[0] : '?', style: const TextStyle(color: Colors.white, fontSize: 24)),
+                          loadFromApi: false,
                         ),
                         const SizedBox(width: 16),
                         Expanded(

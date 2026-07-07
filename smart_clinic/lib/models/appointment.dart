@@ -16,6 +16,7 @@ class Appointment {
   final bool needsPayment;
   final String? medicalRecordId;
   final bool hasConsultation;
+  final String? patientPhotoUrl;
 
   Appointment({
     this.id,
@@ -35,6 +36,7 @@ class Appointment {
     this.needsPayment = false,
     this.medicalRecordId,
     this.hasConsultation = false,
+    this.patientPhotoUrl,
   });
 
   bool get isConsultationEditable => status == 'arrived' && isPaid;
@@ -66,6 +68,7 @@ class Appointment {
       needsPayment: json['needs_payment'] == true || json['payment_status'] == 'refunded',
       medicalRecordId: json['medical_record_id']?.toString(),
       hasConsultation: json['has_consultation'] == true || json['medical_record_id'] != null,
+      patientPhotoUrl: json['patient_photo_url']?.toString(),
     );
   }
 

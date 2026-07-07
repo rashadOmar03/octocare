@@ -377,6 +377,7 @@ def list_patients(
             name=f"{profile.first_name or ''} {profile.last_name or ''}".strip() or "Patient",
             email=user.email,
             phone=profile.phone or user.phone,
+            photo_url=profile.photo_url,
         )
         for profile, user in rows
     ]
@@ -416,6 +417,7 @@ def search_patients(
             name=f"{profile.first_name or ''} {profile.last_name or ''}".strip() or "Patient",
             email=user.email,
             phone=profile.phone or user.phone,
+            photo_url=profile.photo_url,
         )
         for profile, user in rows
     ]

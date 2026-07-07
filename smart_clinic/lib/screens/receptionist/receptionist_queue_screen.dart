@@ -8,6 +8,7 @@ import '../../widgets/loading_widget.dart';
 import '../../widgets/receptionist_scaffold.dart';
 import '../../widgets/receptionist_reschedule_dialog.dart';
 import '../../widgets/role_badge.dart';
+import '../../widgets/user_avatar.dart';
 import '../../utils/time_format.dart';
 import '../../utils/ui_helpers.dart';
 
@@ -201,7 +202,19 @@ class _ReceptionistQueueScreenState extends State<ReceptionistQueueScreen> {
                                     backgroundColor: Theme.of(context).colorScheme.primary,
                                     child: Text('${a.queueNumber ?? i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                   ),
-                                  title: Text(a.patientName ?? ''),
+                                  title: Row(
+                                    children: [
+                                      UserAvatar(
+                                        name: a.patientName,
+                                        photoUrl: a.patientPhotoUrl,
+                                        patientId: a.patientPhotoUrl == null ? a.patientId : null,
+                                        radius: 16,
+                                        loadFromApi: false,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(child: Text(a.patientName ?? '')),
+                                    ],
+                                  ),
                                   subtitle: Text('${a.doctorName ?? ''}\n${a.date ?? ''} — ${TimeFormat.format24To12(a.timeSlot)}'),
                                   isThreeLine: true,
                                   trailing: Row(

@@ -452,6 +452,8 @@ class AppStringsAr {
     'appointment_completed': 'تم تحديد الموعد كمكتمل',
     'edit_consultation': 'تعديل الاستشارة',
     'no_consultation_to_edit': 'لا يوجد سجل استشارة للتعديل',
+    'no_record_for_appointment': 'لا يوجد سجل طبي لهذا الموعد',
+    'view_record': 'عرض السجل',
     'consultation_not_available': 'الاستشارة غير متاحة لهذا الموعد',
     'save_changes': 'حفظ التغييرات',
     'consultation_edit_hint': 'تم إكمال هذا الموعد. يمكنك تحديث الاستشارة المحفوظة فقط — لا يمكن بدء استشارة جديدة.',

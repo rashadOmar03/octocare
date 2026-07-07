@@ -7,6 +7,7 @@ import '../utils/photo_url_utils.dart';
 class UserAvatar extends StatefulWidget {
   final String? name;
   final String? photoUrl;
+  final String? patientId;
   final double radius;
   final bool loadFromApi;
 
@@ -14,6 +15,7 @@ class UserAvatar extends StatefulWidget {
     super.key,
     this.name,
     this.photoUrl,
+    this.patientId,
     this.radius = 28,
     this.loadFromApi = true,
   });
@@ -30,15 +32,16 @@ class UserAvatarState extends State<UserAvatar> {
   void initState() {
     super.initState();
     _photoUrl = PhotoUrlUtils.normalizePath(widget.photoUrl);
-    if (widget.loadFromApi) _loadPhoto();
+    if (widget.loadFromApi || widget.patientId != null) _loadPhoto();
   }
 
   @override
   void didUpdateWidget(UserAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.photoUrl != oldWidget.photoUrl) {
+    if (widget.photoUrl != oldWidget.photoUrl || widget.patientId != oldWidget.patientId) {
       _photoUrl = PhotoUrlUtils.normalizePath(widget.photoUrl);
       _imageFailed = false;
+      if (widget.loadFromApi || widget.patientId != null) _loadPhoto();
     }
   }
 
@@ -46,15 +49,20 @@ class UserAvatarState extends State<UserAvatar> {
 
   Future<void> _loadPhoto() async {
     try {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final response = await ApiService.instance.get('/patients/profile');
+      final endpoint = widget.patientId != null
+          ? '/patients/profile?patient_id=${widget.patientId}'
+          : '/patients/profile';
+      final response = await ApiService.instance.get(endpoint);
       if (mounted && response['photo_url'] != null) {
         final url = response['photo_url'] as String;
         setState(() {
           _photoUrl = url;
           _imageFailed = false;
         });
-        await auth.updateProfilePhoto(url);
+        if (widget.patientId == null) {
+          final auth = Provider.of<AuthProvider>(context, listen: false);
+          await auth.updateProfilePhoto(url);
+        }
       }
     } catch (_) {}
   }
@@ -68,7 +76,10 @@ class UserAvatarState extends State<UserAvatar> {
   @override
   Widget build(BuildContext context) {
     final authPhoto = context.watch<AuthProvider>().currentUser?.profilePhoto;
-    final path = widget.loadFromApi ? _resolvedPath(authPhoto) : PhotoUrlUtils.normalizePath(widget.photoUrl ?? _photoUrl);
+    final useOwnProfile = widget.patientId == null && widget.loadFromApi;
+    final path = useOwnProfile
+        ? _resolvedPath(authPhoto)
+        : PhotoUrlUtils.normalizePath(_photoUrl) ?? PhotoUrlUtils.normalizePath(widget.photoUrl);
     final initial = (widget.name?.isNotEmpty == true) ? widget.name![0].toUpperCase() : '?';
     final colors = Theme.of(context).colorScheme;
 

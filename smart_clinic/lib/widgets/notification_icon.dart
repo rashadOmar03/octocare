@@ -3,8 +3,9 @@ import '../services/api_service.dart';
 
 class NotificationIcon extends StatefulWidget {
   final VoidCallback onPressed;
+  final Color? iconColor;
 
-  const NotificationIcon({super.key, required this.onPressed});
+  const NotificationIcon({super.key, required this.onPressed, this.iconColor});
 
   @override
   State<NotificationIcon> createState() => NotificationIconState();
@@ -39,28 +40,38 @@ class NotificationIconState extends State<NotificationIcon> {
         : const Color(0xFFD84315);
   }
 
+  Color _iconColor(BuildContext context) {
+    if (widget.iconColor != null) return widget.iconColor!;
+    final appBar = Theme.of(context).appBarTheme;
+    if (appBar.foregroundColor != null) return appBar.foregroundColor!;
+    return Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF212121);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final iconColor = IconTheme.of(context).color ?? Theme.of(context).appBarTheme.foregroundColor ?? Colors.white;
+    final iconColor = _iconColor(context);
+    final bellIcon = Icon(
+      _unreadCount > 0 ? Icons.notifications_rounded : Icons.notifications_outlined,
+      color: iconColor,
+    );
 
     return Padding(
       padding: const EdgeInsetsDirectional.only(end: 8),
-      child: Badge(
-        isLabelVisible: _unreadCount > 0,
-        offset: const Offset(-2, 2),
-        backgroundColor: _badgeColor(context),
-        textColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-        label: Text(
-          _unreadCount > 99 ? '99+' : '$_unreadCount',
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.1),
-        ),
-        child: IconButton(
-          icon: Icon(
-            _unreadCount > 0 ? Icons.notifications_rounded : Icons.notifications_outlined,
-            color: iconColor,
+      child: IconButton(
+        tooltip: MaterialLocalizations.of(context).showMenuTooltip,
+        style: IconButton.styleFrom(foregroundColor: iconColor),
+        onPressed: widget.onPressed,
+        icon: Badge(
+          isLabelVisible: _unreadCount > 0,
+          offset: const Offset(4, -4),
+          backgroundColor: _badgeColor(context),
+          textColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+          label: Text(
+            _unreadCount > 99 ? '99+' : '$_unreadCount',
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.1),
           ),
-          onPressed: widget.onPressed,
+          child: bellIcon,
         ),
       ),
     );

@@ -814,6 +814,7 @@ class ReceptionistPatientSearchResult(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
+    photo_url: Optional[str] = None
 
 
 # ─── Receptionist Patient Registration ────────────────────────────────────────

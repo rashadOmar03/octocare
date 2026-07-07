@@ -18,18 +18,15 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
     }
   }
 
-  if (appointment.isConsultationEditOnly || appointment.status == 'completed') {
-    if (!appointment.hasConsultation && appointment.medicalRecordId == null) {
-      final apt = await freshAppointment(appointment);
-      if (!apt.hasConsultation && apt.medicalRecordId == null) {
-        if (context.mounted) {
-          showErrorSnackBar(context, AppLocalizations.tr('no_consultation_to_edit'));
-        }
-        return false;
+  if (appointment.status == 'completed' || appointment.isConsultationEditOnly) {
+    final apt = await freshAppointment(appointment);
+    if (!apt.hasConsultation && apt.medicalRecordId == null) {
+      if (context.mounted) {
+        showErrorSnackBar(context, AppLocalizations.tr('no_record_for_appointment'));
       }
-      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
+      return false;
     }
-    return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: appointment);
+    return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
   }
   if (appointment.isConsultationEditable) {
     final apt = await freshAppointment(appointment);

@@ -236,6 +236,7 @@ def doctor_my_patients(
             "name": f"{prof.first_name or ''} {prof.last_name or ''}".strip() or "Patient",
             "email": user.email,
             "phone": prof.phone or user.phone,
+            "photo_url": prof.photo_url,
         })
     return results
 
@@ -399,6 +400,7 @@ def _enrich_appointment(apt: Appointment, db: Session) -> dict:
     patient = db.query(Profile).filter(Profile.id == apt.patient_id).first()
     if patient:
         result["patient_name"] = f"{patient.first_name or ''} {patient.last_name or ''}".strip()
+        result["patient_photo_url"] = patient.photo_url
     doctor = db.query(Doctor).filter(Doctor.id == apt.doctor_id).first()
     if doctor:
         doc_profile = db.query(Profile).filter(Profile.id == doctor.profile_id).first()

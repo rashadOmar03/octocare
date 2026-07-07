@@ -9,6 +9,7 @@ import '../../widgets/loading_widget.dart';
 import '../../widgets/receptionist_scaffold.dart';
 import '../../widgets/receptionist_reschedule_dialog.dart';
 import '../../utils/ui_helpers.dart';
+import '../../utils/appointment_record_nav.dart';
 
 enum _DateScope { upcoming, today, all }
 
@@ -298,6 +299,13 @@ class _ReceptionistAppointmentsScreenState extends State<ReceptionistAppointment
           return AppointmentCard(
             appointment: apt,
             showPatient: true,
+            onTap: apt.status == 'completed'
+                ? () => openAppointmentMedicalRecord(
+                      context,
+                      apt,
+                      recordDetailRoute: AppRoutes.receptionistRecordDetail,
+                    )
+                : null,
             onRecordPayment: !apt.isPaid && apt.status != 'cancelled' && apt.status != 'completed'
                 ? () => Navigator.pushNamed(
                       context,

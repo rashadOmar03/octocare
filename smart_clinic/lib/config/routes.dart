@@ -49,6 +49,7 @@ class AppRoutes {
   static const String receptionistBookAppointment = '/receptionist/book-appointment';
   static const String receptionistProfile = '/receptionist/profile';
   static const String receptionistNotifications = '/receptionist/notifications';
+  static const String receptionistRecordDetail = '/receptionist/record-detail';
   static const String receptionistReports = '/receptionist/reports';
 
   // Admin routes

@@ -452,6 +452,8 @@ class AppStringsEn {
     'appointment_completed': 'Appointment marked as completed',
     'edit_consultation': 'Edit consultation',
     'no_consultation_to_edit': 'No consultation record found to edit',
+    'no_record_for_appointment': 'No medical record found for this appointment',
+    'view_record': 'View record',
     'consultation_not_available': 'Consultation is not available for this appointment',
     'save_changes': 'Save changes',
     'consultation_edit_hint': 'This appointment is completed. You can update the saved consultation only — a new consultation cannot be started.',

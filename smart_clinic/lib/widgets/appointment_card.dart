@@ -3,6 +3,7 @@ import '../models/appointment.dart';
 import '../l10n/localization.dart';
 import '../utils/time_format.dart';
 import 'role_badge.dart';
+import 'user_avatar.dart';
 
 class AppointmentCard extends StatelessWidget {
   final Appointment appointment;
@@ -62,6 +63,16 @@ class AppointmentCard extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  if (showPatient && appointment.patientName != null) ...[
+                    UserAvatar(
+                      name: appointment.patientName,
+                      photoUrl: appointment.patientPhotoUrl,
+                      patientId: appointment.patientPhotoUrl == null ? appointment.patientId : null,
+                      radius: 22,
+                      loadFromApi: false,
+                    ),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

@@ -204,6 +204,7 @@ class OctocareClinicApp extends StatelessWidget {
           AppRoutes.receptionistProfile: (_) => const RoleGuard(requiredRole: 'receptionist', child: ReceptionistProfileScreen()),
           AppRoutes.receptionistReports: (_) => const RoleGuard(requiredRole: 'receptionist', child: ReceptionistReportsScreen()),
           AppRoutes.receptionistNotifications: (_) => const RoleGuard(requiredRole: 'receptionist', child: NotificationsScreen()),
+          AppRoutes.receptionistRecordDetail: (_) => const RoleGuard(requiredRole: 'receptionist', child: RecordDetailScreen()),
           AppRoutes.receptionistAi: (_) => const RoleGuard(requiredRole: 'receptionist', child: AiChatScreen(role: 'receptionist')),
 
           // Admin

@@ -5,6 +5,7 @@ import '../../services/api_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/bottom_nav.dart';
+import '../../widgets/user_avatar.dart';
 import '../../utils/ui_helpers.dart';
 
 class DoctorPatientsScreen extends StatefulWidget {
@@ -42,6 +43,7 @@ class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
       'last_name': row['last_name'] ?? (parts.length > 1 ? parts.sublist(1).join(' ') : ''),
       'email': row['email'],
       'phone': row['phone'],
+      'photo_url': row['photo_url'],
     };
   }
 
@@ -114,7 +116,13 @@ class _DoctorPatientsScreenState extends State<DoctorPatientsScreen> {
                             final name = '${p['first_name'] ?? ''} ${p['last_name'] ?? ''}'.trim();
                             return Card(
                               child: ListTile(
-                                leading: CircleAvatar(child: Text(name.isNotEmpty ? name[0] : '?')),
+                                leading: UserAvatar(
+                                  name: name,
+                                  photoUrl: p['photo_url']?.toString(),
+                                  patientId: p['profile_id']?.toString(),
+                                  radius: 20,
+                                  loadFromApi: false,
+                                ),
                                 title: Text(name),
                                 subtitle: Text(
                                   p['phone']?.toString().isNotEmpty == true
