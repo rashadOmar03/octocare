@@ -13,7 +13,6 @@ class VoicePlatform {
   bool isRecording = false;
   String recordingFilename = 'voice.webm';
   String _mimeType = 'audio/webm';
-  bool _useTimeslice = false;
 
   bool get _isAppleBrowser {
     final ua = window.navigator.userAgent.toLowerCase();
@@ -31,7 +30,6 @@ class VoicePlatform {
           'noiseSuppression': true,
           'autoGainControl': true,
           'channelCount': 1,
-          'sampleRate': 48000,
         }.jsify() as JSObject,
       );
       return await mediaDevices.getUserMedia(constraints).toDart;
@@ -42,7 +40,6 @@ class VoicePlatform {
     }
   }
 
-  /// Avoid opening the mic here — a second getUserMedia in startRecording caused empty audio on laptops.
   Future<bool> ensureMicPermission() async => true;
 
   List<String> _mimeCandidates() {
@@ -87,7 +84,7 @@ class VoicePlatform {
       _stream = await _getMicStream();
     } catch (_) {
       throw Exception(
-        'Microphone access denied or unavailable. Click the lock icon in the address bar, allow microphone, then refresh.',
+        'Microphone access denied. Click the lock icon in the address bar, allow microphone, then refresh.',
       );
     }
     final audioTracks = _stream!.getAudioTracks().toDart;
@@ -111,14 +108,8 @@ class VoicePlatform {
       }
     }).toJS;
 
-    // No timeslice: one reliable blob on stop (works better on Chrome/Edge laptops).
-    _useTimeslice = false;
-    try {
-      _recorder!.start();
-    } catch (_) {
-      _useTimeslice = true;
-      _recorder!.start(300);
-    }
+    // Timeslice ensures Chrome/Edge/Firefox emit audio chunks reliably on laptops.
+    _recorder!.start(250);
     isRecording = true;
   }
 
@@ -134,7 +125,7 @@ class VoicePlatform {
     final chunks = _chunks;
 
     recorder.onstop = ((Event _) {
-      Timer(const Duration(milliseconds: 250), () async {
+      Timer(const Duration(milliseconds: 300), () async {
         try {
           Uint8List bytes = Uint8List(0);
           if (chunks.isNotEmpty) {
@@ -161,9 +152,8 @@ class VoicePlatform {
     }).toJS;
 
     try {
-      if (_useTimeslice) {
-        recorder.requestData();
-      }
+      recorder.requestData();
+      await Future<void>.delayed(const Duration(milliseconds: 120));
       recorder.stop();
     } catch (_) {
       _finalizeRecording();

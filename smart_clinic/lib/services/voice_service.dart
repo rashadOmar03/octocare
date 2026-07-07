@@ -4,41 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'api_service.dart';
 import 'voice_platform.dart';
-
-const _whisperHallucinations = {
-  'you',
-  'you.',
-  'thank you',
-  'thank you.',
-  'thanks',
-  'thanks.',
-  'thanks for watching',
-  'thank you for watching',
-  'subscribe',
-  'bye',
-  'bye bye',
-  'the end',
-  '...',
-  'mm',
-  'hmm',
-  'uh',
-  'um',
-  'okay',
-  'ok',
-  'شكرا',
-  'شكراً',
-  'مرحبا',
-  'مرحباً',
-};
-
-bool _isLowQualityTranscript(String transcript, int audioBytes) {
-  final cleaned = transcript.trim().toLowerCase().replaceAll(RegExp(r'[.,!?]+$'), '');
-  if (cleaned.isEmpty) return true;
-  if (_whisperHallucinations.contains(cleaned) && audioBytes < 16000) return true;
-  if (cleaned.length <= 4 && audioBytes < 10000) return true;
-  if (cleaned.split(RegExp(r'\s+')).length <= 1 && audioBytes < 6000) return true;
-  return false;
-}
+import '../l10n/localization.dart';
 
 class VoiceService {
   VoiceService._();
@@ -53,15 +19,14 @@ class VoiceService {
 
   Future<bool> ensureMicPermission() => _platform.ensureMicPermission();
 
+  String _uiLanguage() {
+    final locale = AppLocalizations.currentLocale.toLowerCase();
+    return locale.startsWith('ar') ? 'ar' : 'en';
+  }
+
   Future<void> startRecording() async {
     if (_platform.isRecording) return;
     try {
-      final permitted = await _platform.ensureMicPermission();
-      if (!permitted) {
-        throw Exception(
-          'Microphone access is blocked. Allow the microphone for this site in your browser settings, then refresh.',
-        );
-      }
       await _platform.startRecording();
       _recordingStartedAt = DateTime.now();
     } on MissingPluginException {
@@ -79,35 +44,33 @@ class VoiceService {
     final startedAt = _recordingStartedAt;
     _recordingStartedAt = null;
     if (startedAt != null &&
-        DateTime.now().difference(startedAt).inMilliseconds < 1200) {
+        DateTime.now().difference(startedAt).inMilliseconds < 800) {
       await _platform.cancelRecording();
-      throw Exception('Hold the mic for at least 2 seconds while you speak, then tap stop.');
+      throw Exception('Hold the mic for at least 1 second while you speak, then tap stop.');
     }
 
     final bytes = await _platform.stopRecordingBytes();
     if (bytes.isEmpty) {
       throw Exception(
-        'No audio captured. Click the mic once to start (red stop icon), speak for 2–3 seconds, then tap stop. '
-        'Allow microphone access when the browser asks, and check your laptop or phone mic is not muted.',
+        'No audio captured. Tap mic (red stop icon), speak clearly for 2–3 seconds, tap stop. Allow microphone access.',
       );
     }
 
+    final lang = language ?? _uiLanguage();
     final filename = _platform.recordingFilename;
     final response = await ApiService.instance.postMultipart(
       '/ai/transcribe',
       fileField: 'file',
       bytes: bytes,
       filename: filename,
-      fields: {
-        if (language != null && (language == 'ar' || language == 'en')) 'language': language,
-      },
+      fields: {'language': lang},
       timeout: const Duration(seconds: 180),
     );
 
     final transcript = (response['transcript'] ?? '').toString().trim();
-    if (transcript.isEmpty || _isLowQualityTranscript(transcript, bytes.length)) {
+    if (transcript.isEmpty) {
       throw Exception(
-        'Could not detect clear speech. Speak for 2–3 seconds in a quiet place, then tap stop.',
+        'Could not detect speech. Speak clearly in Arabic or English for 2–3 seconds, then tap stop.',
       );
     }
     return transcript;
@@ -122,9 +85,10 @@ class VoiceService {
     await _platform.stopPlayback();
     _speakingMessageIndex = messageIndex;
 
+    final lang = language ?? _uiLanguage();
     final response = await ApiService.instance.post('/ai/speak', {
       'text': cleaned,
-      'language': language ?? 'en',
+      'language': lang,
     });
     final audioBase64 = (response['audio_base64'] ?? '').toString();
     if (audioBase64.isEmpty) {

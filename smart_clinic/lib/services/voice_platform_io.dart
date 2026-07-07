@@ -19,8 +19,7 @@ class VoicePlatform {
   AudioPlayer get _audioPlayer => _playerInstance ??= AudioPlayer();
 
   Future<bool> ensureMicPermission() async {
-    final has = await _rec.hasPermission();
-    if (has) return true;
+    if (await _rec.hasPermission()) return true;
     return _rec.hasPermission();
   }
 
@@ -50,6 +49,7 @@ class VoicePlatform {
     if (!isRecording) return Uint8List(0);
     final path = await _rec.stop();
     isRecording = false;
+    await Future<void>.delayed(const Duration(milliseconds: 200));
     final resolved = path ?? _recordPath;
     if (resolved == null || resolved.isEmpty) {
       return Uint8List(0);

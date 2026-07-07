@@ -25,13 +25,12 @@ VOICE_MAP = {
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "") or os.getenv("LM_API_KEY", "")
 GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3")
 
-# Whisper often hallucinates these on silence, short clips, or noisy laptop mics.
+# Whisper often hallucinates these on silence or very short English clips only.
 _WHISPER_HALLUCINATIONS = frozenset({
     "you", "you.", "thank you", "thank you.", "thanks", "thanks.",
     "thanks for watching", "thank you for watching",
     "subscribe", "bye", "bye bye", "the end",
     "...", "mm", "hmm", "uh", "um", "okay", "ok",
-    "شكرا", "شكراً", "مرحبا", "مرحباً",
 })
 
 
@@ -47,16 +46,17 @@ def _mime_for_suffix(suffix: str) -> str:
 
 
 def _is_low_quality_transcript(transcript: str, audio_bytes: bytes | int) -> bool:
-    """True when Whisper likely hallucinated on silence or a very short clip."""
+    """True only for obvious English silence hallucinations on tiny clips."""
     cleaned = (transcript or "").strip().lower().rstrip(".,!?")
     if not cleaned:
         return True
     size = audio_bytes if isinstance(audio_bytes, int) else len(audio_bytes)
-    if cleaned in _WHISPER_HALLUCINATIONS and size < 16000:
+    word_count = len(cleaned.split())
+    if cleaned in _WHISPER_HALLUCINATIONS and size < 3000:
         return True
-    if len(cleaned) <= 4 and size < 10000:
-        return True
-    if len(cleaned.split()) <= 1 and size < 6000:
+    if word_count >= 2:
+        return False
+    if len(cleaned) <= 2 and size < 1200:
         return True
     return False
 
@@ -96,49 +96,75 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
     """Transcribe via Groq Whisper API (cloud, no GPU)."""
     import httpx
 
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(audio_bytes)
-        tmp_path = tmp.name
+    if not suffix or suffix == ".":
+        suffix = ".webm"
 
-    try:
-        mime = _mime_for_suffix(suffix)
-        with open(tmp_path, "rb") as f:
-            files = {"file": (f"audio{suffix}", f, mime)}
-            data: dict = {
-                "model": GROQ_WHISPER_MODEL,
-                "response_format": "json",
-                "temperature": "0",
-                "prompt": "Medical clinic conversation. Patient or staff speaking English or Arabic.",
-            }
-            # Omit language so Whisper auto-detects Arabic vs English from speech.
-            # Forcing UI locale caused Arabic speech to be transcribed in English.
-            if language in ("ar", "en"):
-                data["language"] = language
+    if len(audio_bytes) < 400:
+        return {"transcript": "", "language": language or "en", "model": f"groq-{GROQ_WHISPER_MODEL}"}
 
-            resp = httpx.post(
-                "https://api.groq.com/openai/v1/audio/transcriptions",
-                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-                files=files,
-                data=data,
-                timeout=90.0,
-            )
-            resp.raise_for_status()
-            body = resp.json()
-
-        transcript = (body.get("text") or "").strip()
-        detected = _normalize_language(body.get("language"), fallback=language or "en")
-        if _is_low_quality_transcript(transcript, audio_bytes):
-            transcript = ""
-        return {
-            "transcript": transcript,
-            "language": detected,
-            "model": f"groq-{GROQ_WHISPER_MODEL}",
-        }
-    finally:
+    def _call(lang: str | None, *, use_prompt: bool) -> dict:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
         try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+            mime = _mime_for_suffix(suffix)
+            with open(tmp_path, "rb") as f:
+                files = {"file": (f"audio{suffix}", f, mime)}
+                data: dict = {
+                    "model": GROQ_WHISPER_MODEL,
+                    "response_format": "verbose_json",
+                    "temperature": "0",
+                }
+                if use_prompt:
+                    data["prompt"] = "Medical clinic. Patient or staff speaking Arabic or English."
+                if lang in ("ar", "en"):
+                    data["language"] = lang
+
+                resp = httpx.post(
+                    "https://api.groq.com/openai/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                    files=files,
+                    data=data,
+                    timeout=90.0,
+                )
+
+            if resp.status_code != 200:
+                return {"transcript": "", "language": lang or "en", "error": resp.text[:300]}
+
+            body = resp.json()
+            transcript = (body.get("text") or "").strip()
+            detected = _normalize_language(body.get("language"), fallback=lang or "en")
+            if _is_low_quality_transcript(transcript, audio_bytes):
+                transcript = ""
+            return {
+                "transcript": transcript,
+                "language": detected,
+                "model": f"groq-{GROQ_WHISPER_MODEL}",
+            }
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    attempts: list[tuple[str | None, bool]] = [
+        (language, True),
+        (language, False),
+        (None, False),
+    ]
+    if language == "ar":
+        attempts.append(("en", False))
+    elif language == "en":
+        attempts.append(("ar", False))
+
+    last: dict = {"transcript": "", "language": language or "en", "model": f"groq-{GROQ_WHISPER_MODEL}"}
+    for lang, use_prompt in attempts:
+        result = _call(lang, use_prompt=use_prompt)
+        last = result
+        if result.get("transcript"):
+            return result
+
+    return last
 
 
 def model_for_role(role: str) -> ModelSize:

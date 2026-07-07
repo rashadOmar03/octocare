@@ -1210,23 +1210,35 @@ async def transcribe_voice(
     audio_bytes = await file.read()
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file")
+    if len(audio_bytes) < 400:
+        raise HTTPException(
+            status_code=422,
+            detail="Recording too short. Hold the mic and speak for at least 2 seconds.",
+        )
 
     suffix = ".webm"
     if file.filename and "." in file.filename:
         suffix = "." + file.filename.rsplit(".", 1)[-1].lower()
+
+    lang = language if language in ("ar", "en") else None
+    if not lang and current_user.role:
+        lang = None
 
     try:
         result = transcribe_bytes(
             audio_bytes,
             suffix=suffix,
             role=current_user.role or "patient",
-            language=language if language in ("ar", "en") else None,
+            language=lang,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
 
     if not result.get("transcript"):
-        raise HTTPException(status_code=422, detail="Could not detect speech. Please try again or type your message.")
+        raise HTTPException(
+            status_code=422,
+            detail="Could not detect speech. Speak clearly for 2–3 seconds in Arabic or English, then tap stop.",
+        )
 
     return VoiceTranscribeResponse(**result)
 

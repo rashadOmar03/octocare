@@ -21,6 +21,8 @@ from models import User  # noqa: E402
 
 client = TestClient(app)
 
+SAMPLE_AUDIO_BYTES = b"\x00" * 512
+
 
 def _user(role: str) -> User:
     return User(
@@ -129,7 +131,7 @@ def test_transcribe_patient_uses_small_model(mock_transcribe, auth_as):
     response = client.post(
         "/ai/transcribe",
         data={"language": "en"},
-        files={"file": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+        files={"file": ("voice.webm", BytesIO(SAMPLE_AUDIO_BYTES), "audio/webm")},
     )
     assert response.status_code == 200
     body = response.json()
@@ -148,7 +150,7 @@ def test_transcribe_doctor_uses_medium_model(mock_transcribe, auth_as):
     }
     response = client.post(
         "/ai/transcribe",
-        files={"file": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+        files={"file": ("voice.webm", BytesIO(SAMPLE_AUDIO_BYTES), "audio/webm")},
     )
     assert response.status_code == 200
     body = response.json()
@@ -168,7 +170,7 @@ def test_transcribe_arabic_consultation_text(mock_transcribe, auth_as):
     response = client.post(
         "/ai/transcribe",
         data={"language": "ar"},
-        files={"file": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+        files={"file": ("voice.webm", BytesIO(SAMPLE_AUDIO_BYTES), "audio/webm")},
     )
     assert response.status_code == 200
     assert response.json()["language"] == "ar"
@@ -184,7 +186,7 @@ def test_transcribe_receptionist_chat(mock_transcribe, auth_as):
     }
     response = client.post(
         "/ai/transcribe",
-        files={"file": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+        files={"file": ("voice.webm", BytesIO(SAMPLE_AUDIO_BYTES), "audio/webm")},
     )
     assert response.status_code == 200
     assert mock_transcribe.call_args.kwargs["role"] == "receptionist"
@@ -200,7 +202,7 @@ def test_transcribe_admin_chat(mock_transcribe, auth_as):
     }
     response = client.post(
         "/ai/transcribe",
-        files={"file": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+        files={"file": ("voice.webm", BytesIO(SAMPLE_AUDIO_BYTES), "audio/webm")},
     )
     assert response.status_code == 200
     assert mock_transcribe.call_args.kwargs["role"] == "admin"
@@ -212,7 +214,7 @@ def test_transcribe_empty_speech_returns_422(mock_transcribe, auth_as):
     mock_transcribe.return_value = {"transcript": "", "language": "en", "model": "small"}
     response = client.post(
         "/ai/transcribe",
-        files={"file": ("voice.webm", BytesIO(b"fake-audio"), "audio/webm")},
+        files={"file": ("voice.webm", BytesIO(SAMPLE_AUDIO_BYTES), "audio/webm")},
     )
     assert response.status_code == 422
 
@@ -220,8 +222,8 @@ def test_transcribe_empty_speech_returns_422(mock_transcribe, auth_as):
 def test_whisper_hallucination_you_on_short_audio():
     from voice_service import _is_low_quality_transcript
 
-    assert _is_low_quality_transcript("you", 2000) is True
-    assert _is_low_quality_transcript("thank you", 3000) is True
+    assert _is_low_quality_transcript("you", 1500) is True
+    assert _is_low_quality_transcript("thank you", 1500) is True
     assert _is_low_quality_transcript("I have chest pain", 2000) is False
     assert _is_low_quality_transcript("you", 20000) is False
 
