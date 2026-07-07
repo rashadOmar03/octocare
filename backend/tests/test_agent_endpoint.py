@@ -391,6 +391,31 @@ class TestDoctorRole:
         resp = client.post("/ai/agent", json={"message": "Show me admin dashboard"})
         assert resp.status_code == 200  # still 200 but data won't be there
 
+    @patch(MODEL_PATCH)
+    def test_doctor_cannot_see_other_doctors_availability(self, mock_model, auth_as, db_session):
+        spec = _make_specialty(db_session, "Pediatrics")
+        spec2 = _make_specialty(db_session, "Cardiology")
+        _make_doctor(db_session, spec, "Fatima", "Al-Rashid")
+        d_user, _, doc_self = _make_doctor(db_session, spec2, "Ahmed", "Hassan")
+        db_session.commit()
+        mock_model.return_value = MODEL_RETURN
+        auth_as("doctor", user=d_user)
+        client.post(
+            "/ai/agent",
+            json={
+                "message": (
+                    "can u get the other patients and of other dr's and also can u tell me "
+                    "the appointments they have and what free slots they have"
+                )
+            },
+        )
+        payload = _llm_payload(mock_model)
+        assert "DOCTOR AVAILABILITY" not in payload.upper()
+        assert "Fatima" not in payload
+        assert "Al-Rashid" not in payload
+        assert "ACCESS DENIED" in payload.upper() or "ACCESS SCOPE" in payload.upper()
+        assert "MY SCHEDULE" in payload.upper() or "Ahmed" in payload
+
     @patch(MODEL_PATCH, return_value=MODEL_RETURN)
     def test_arabic_schedule_query(self, _mock, auth_as, db_session):
         spec = _make_specialty(db_session)
@@ -911,7 +936,8 @@ class TestFeatureCoverage:
         auth_as("doctor", user=du)
         client.post("/ai/agent", json={"message": "What free slots are available tomorrow?"})
         prompt = _llm_payload(mock)
-        assert "available_slots" in prompt or "available_count" in prompt
+        assert "DOCTOR AVAILABILITY" not in prompt.upper()
+        assert "MY SCHEDULE" in prompt.upper() or "my_schedule" in prompt.lower()
 
     # ── ADMIN: dashboard, compare doctors, patient lookup, staff list,
     #    audit log, revenue, cancellations, availability, today stats ──────────

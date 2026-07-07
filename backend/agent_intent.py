@@ -312,28 +312,29 @@ def detect_intent(message: str, role: str) -> list[str]:
     """
     intents: list[str] = []
 
-    # ── Universal intents ──────────────────────────────────────────────────────
+    # ── Universal intents (patients + staff; doctors see only own clinical data) ─
     if _match(message, _CLINIC_KW):
         intents.append("clinic_info")
 
-    if _match(message, _DOCTOR_KW):
-        intents.append("doctor_search")
+    if role != "doctor":
+        if _match(message, _DOCTOR_KW):
+            intents.append("doctor_search")
 
-    if _match(message, _AVAILABILITY_KW) or (
-        _match(message, _DOCTOR_KW) and any(
-            w in message.lower()
-            for w in (
-                "tomorrow", "today", "next",
-                "بكرا", "بكره", "بكرة", "غدا", "غداً",
-                "اليوم", "النهارده", "النهاردة", "النهارده",
-                "بعد بكرا", "بعد بكره", "بعد بكرة",
-                "امتى", "إمتى", "امتا", "إمتا", "متى",
+        if _match(message, _AVAILABILITY_KW) or (
+            _match(message, _DOCTOR_KW) and any(
+                w in message.lower()
+                for w in (
+                    "tomorrow", "today", "next",
+                    "بكرا", "بكره", "بكرة", "غدا", "غداً",
+                    "اليوم", "النهارده", "النهاردة", "النهارده",
+                    "بعد بكرا", "بعد بكره", "بعد بكرة",
+                    "امتى", "إمتى", "امتا", "إمتا", "متى",
+                )
             )
-        )
-    ):
-        intents.append("doctor_availability")
+        ):
+            intents.append("doctor_availability")
 
-    if _match(message, _SYMPTOM_KW):
+    if role == "patient" and _match(message, _SYMPTOM_KW):
         intents.append("symptom_advice")
 
     # ── Patient only ───────────────────────────────────────────────────────────
@@ -371,13 +372,14 @@ def detect_intent(message: str, role: str) -> list[str]:
     if role == "doctor":
         if _match(message, _MY_SCHEDULE_KW) or _match(message, _STATS_KW):
             intents.append("my_schedule")
-            for remove_intent in ("doctor_availability", "clinic_info", "doctor_search"):
-                if remove_intent in intents:
-                    intents.remove(remove_intent)
         if _match(message, _MY_REVIEWS_KW):
             intents.append("my_reviews")
         if _match(message, _STATS_KW):
             intents.append("today_stats")
+        # Questions about other doctors / other doctors' patients → own schedule only
+        if _match(message, _DOCTOR_KW) or _match(message, _AVAILABILITY_KW) or _match(message, _PATIENT_LOOKUP_KW):
+            if "my_schedule" not in intents:
+                intents.append("my_schedule")
 
     # ── Admin only ─────────────────────────────────────────────────────────────
     if role == "admin":

@@ -569,6 +569,21 @@ def tool_doctor_schedule_today(db: Session, doctor_id: str) -> list[dict]:
     return [_enrich_apt(a, db) for a in rows]
 
 
+def tool_doctor_stats_today(db: Session, doctor_id: str) -> dict:
+    """Today's appointment counts for one doctor only."""
+    today = date.today()
+    q = db.query(Appointment).filter(Appointment.doctor_id == doctor_id, Appointment.date == today)
+    return {
+        "date": str(today),
+        "my_total": q.count(),
+        "my_pending": q.filter(Appointment.status == "pending").count(),
+        "my_confirmed": q.filter(Appointment.status == "confirmed").count(),
+        "my_arrived": q.filter(Appointment.status == "arrived").count(),
+        "my_completed": q.filter(Appointment.status == "completed").count(),
+        "my_cancelled": q.filter(Appointment.status == "cancelled").count(),
+    }
+
+
 def tool_doctor_reviews_summary(db: Session, doctor_id: str) -> dict:
     stats = _rating_stats(db, doctor_id)
     recent = tool_get_doctor_reviews(db, doctor_id, limit=5)

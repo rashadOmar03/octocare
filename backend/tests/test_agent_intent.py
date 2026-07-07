@@ -153,6 +153,15 @@ class TestDoctorIntents:
         intents = detect_intent("Give me the admin dashboard", "doctor")
         assert "admin_overview" not in intents
 
+    def test_doctor_cannot_search_other_doctors(self):
+        intents = detect_intent(
+            "can you tell me other doctors appointments and free slots",
+            "doctor",
+        )
+        assert "doctor_search" not in intents
+        assert "doctor_availability" not in intents
+        assert "my_schedule" in intents
+
 
 # ─── detect_intent — admin ────────────────────────────────────────────────────
 

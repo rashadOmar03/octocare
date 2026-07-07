@@ -50,6 +50,7 @@ from agent_tools import (
     tool_cancellations,
     tool_doctor_workload,
     tool_doctor_schedule_today,
+    tool_doctor_stats_today,
     tool_doctor_reviews_summary,
     tool_admin_dashboard,
     tool_compare_doctors,
@@ -352,13 +353,15 @@ _AGENT_SYSTEM: dict[str, str] = {
         "You have access to REAL clinic data in the CLINIC DATA section below.\n"
         "Use ONLY facts from that section. NEVER invent names, numbers, or details.\n\n"
         "RULES:\n"
-        "- When asked about 'my schedule' or 'my patients', only show THIS doctor's data\n"
-        "- Do NOT show other doctors' schedules unless explicitly asked\n"
-        "- Help with schedule, queue, and operational questions\n"
+        "- You may ONLY show THIS doctor's schedule, reviews, and own patients from MY SCHEDULE data\n"
+        "- NEVER show other doctors' names, slots, workloads, or their patients\n"
+        "- If asked about another doctor, other staff, or other doctors' patients, politely refuse and\n"
+        "  say you can only help with the logged-in doctor's own schedule and reviews\n"
+        "- Clinic-wide revenue, queues, patient search, and admin stats are NOT available to you\n"
+        "- Help with schedule, queue, and operational questions for YOUR patients only\n"
         "- Summarise patient reviews honestly from the data\n"
         "- General clinical info is for reference only, all decisions are yours\n"
         "- Do NOT replace the SOAP extraction or prescription tools\n"
-        "- When DOCTOR AVAILABILITY data is provided, show the actual time slots clearly\n"
         "- Be professional and concise"
         + _FORMAT_RULES + _LANG_RULE
     ),
@@ -487,6 +490,22 @@ def _extract_target_date(message: str) -> date | None:
     return None
 
 
+_OTHER_DOCTOR_PHRASES = (
+    "other doctor", "other doctors", "another doctor", "other dr", "other drs",
+    "other physician", "other specialists", "their appointments", "their patients",
+    "other patients", "patients of", "doctors have", "dr's have", "drs have",
+    "free slots they", "appointments they",
+    "دكتور تاني", "دكاترة تانيين", "دكاترة اخر", "دكاترة آخر", "طبيب آخر",
+    "طبيب اخر", "مرضى دكتور", "مرضى الدكتور", "مواعيد دكتور", "مواعيد الدكتور",
+    "الدكاترة التانيين", "باقي الدكاترة",
+)
+
+
+def _doctor_asking_cross_scope(message: str) -> bool:
+    msg = message.lower()
+    return any(p in msg for p in _OTHER_DOCTOR_PHRASES)
+
+
 def _fetch_agent_facts(
     intents: list[str],
     role: str,
@@ -496,18 +515,20 @@ def _fetch_agent_facts(
 ) -> dict:
     """Run the tools indicated by intents and merge the results."""
     facts: dict = {}
+    directory_roles = ("patient", "receptionist", "admin")
 
-    # ── Clinic info / specialties / doctors ───────────────────────────────────
+    # ── Clinic info / specialties / doctors (not for logged-in doctors) ───────
     if "clinic_info" in intents:
         facts["clinic_settings"] = tool_clinic_settings(db)
 
-    if "clinic_info" in intents or "doctor_search" in intents or "symptom_advice" in intents:
+    if role in directory_roles and (
+        "clinic_info" in intents or "doctor_search" in intents or "symptom_advice" in intents
+    ):
         facts["specialties"] = tool_list_specialties(db)
 
-    if "doctor_search" in intents or "symptom_advice" in intents:
+    if ("doctor_search" in intents or "symptom_advice" in intents) and role in directory_roles:
         doctors = tool_list_doctors(db)
         facts["doctors"] = doctors
-        # Include reviews for top-rated doctors (up to 3)
         top = sorted(
             [d for d in doctors if d["review_count"] > 0],
             key=lambda x: x["average_rating"] or 0,
@@ -519,8 +540,8 @@ def _fetch_agent_facts(
                 for d in top
             }
 
-    # ── Doctor availability (all roles can ask) ────────────────────────────────
-    if "doctor_availability" in intents:
+    # ── Doctor availability (patients + staff only) ───────────────────────────
+    if "doctor_availability" in intents and role in directory_roles:
         doc_name = _extract_doctor_name(message)
         target = _extract_target_date(message)
         avail = tool_doctor_availability(db, doctor_name=doc_name, target_date=target)
@@ -552,10 +573,14 @@ def _fetch_agent_facts(
         facts["live_queue"] = tool_live_queue(db, doctor_name=doc_name)
 
     # ── Receptionist / admin / doctor ops ─────────────────────────────────────
-    if "today_stats" in intents and role in ("receptionist", "admin", "doctor"):
+    if "today_stats" in intents and role in ("receptionist", "admin"):
         facts["today"] = tool_today_dashboard(db)
-        if role in ("receptionist", "admin"):
-            facts["doctor_workload_today"] = tool_doctor_workload(db)
+        facts["doctor_workload_today"] = tool_doctor_workload(db)
+
+    if "today_stats" in intents and role == "doctor":
+        doc_id = _get_doctor_id(current_user, db)
+        if doc_id:
+            facts["my_stats_today"] = tool_doctor_stats_today(db, doc_id)
 
     if "doctor_workload" in intents and role in ("receptionist", "admin"):
         facts["doctor_workload_today"] = tool_doctor_workload(db)
@@ -576,7 +601,15 @@ def _fetch_agent_facts(
             "It is an approximation, not an exact figure."
         )
 
-    # ── Doctor ops ────────────────────────────────────────────────────────────
+    # ── Doctor ops (own data only) ────────────────────────────────────────────
+    if role == "doctor" and _doctor_asking_cross_scope(message):
+        facts["access_scope_note"] = (
+            "ACCESS DENIED: The logged-in doctor cannot view other doctors' schedules, "
+            "free slots, or their patients through this assistant. "
+            "Only the logged-in doctor's own MY SCHEDULE / MY STATS data may be shared. "
+            "Politely refuse the cross-doctor request."
+        )
+
     if "my_schedule" in intents and role == "doctor":
         doc_id = _get_doctor_id(current_user, db)
         if doc_id:

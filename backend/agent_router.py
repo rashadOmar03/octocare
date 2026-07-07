@@ -37,8 +37,6 @@ ROLE_ALLOWED: dict[str, set[str]] = {
     },
     "doctor": {
         "clinic_info",
-        "doctor_search",
-        "doctor_availability",
         "my_schedule",
         "my_reviews",
         "today_stats",
@@ -150,10 +148,14 @@ def _resolve_conflicts(intents: list[str], role: str) -> list[str]:
     result = list(intents)
     if role == "patient" and "my_appointments" in result and "doctor_availability" in result:
         result.remove("doctor_availability")
-    if role == "doctor" and "my_schedule" in result:
-        for drop in ("doctor_availability", "clinic_info", "doctor_search"):
+    if role == "doctor":
+        for drop in ("doctor_availability", "doctor_search", "symptom_advice"):
             if drop in result:
                 result.remove(drop)
+        if "my_schedule" in result:
+            for drop in ("clinic_info",):
+                if drop in result:
+                    result.remove(drop)
     return result
 
 
