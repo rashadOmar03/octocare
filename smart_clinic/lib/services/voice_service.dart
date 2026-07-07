@@ -68,14 +68,16 @@ class VoiceService {
     final startedAt = _recordingStartedAt;
     _recordingStartedAt = null;
     if (startedAt != null &&
-        DateTime.now().difference(startedAt).inMilliseconds < 2000) {
+        DateTime.now().difference(startedAt).inMilliseconds < 1500) {
       await _platform.cancelRecording();
       throw Exception('Hold the mic for at least 2 seconds while you speak, then tap stop.');
     }
 
     final bytes = await _platform.stopRecordingBytes();
     if (bytes.isEmpty) {
-      throw Exception('No audio captured. Check your microphone and try again.');
+      throw Exception(
+        'No audio captured. Allow microphone access in your browser, check Windows mic settings, then try again.',
+      );
     }
 
     final filename = _platform.recordingFilename;

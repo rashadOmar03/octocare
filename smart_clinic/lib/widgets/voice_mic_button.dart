@@ -83,7 +83,7 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
               ),
             )
           : Icon(
-              recording ? Icons.stop_circle_outlined : Icons.mic_none,
+              recording ? Icons.stop_circle : Icons.mic,
               color: recording ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary,
             ),
     );

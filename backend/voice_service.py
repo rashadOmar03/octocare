@@ -120,7 +120,7 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
                 files=files,
                 data=data,
-                timeout=30.0,
+                timeout=90.0,
             )
             resp.raise_for_status()
             body = resp.json()
