@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../l10n/localization.dart';
+import '../providers/locale_provider.dart';
 import '../services/voice_service.dart';
 import '../utils/ui_helpers.dart';
 
@@ -7,6 +9,8 @@ class VoiceMicButton extends StatefulWidget {
   final TextEditingController controller;
   final bool appendWithSpace;
   final VoidCallback? onTranscribed;
+  /// Override Whisper language (ar/en). Use when chat is Arabic but app locale differs.
+  final String? languageOverride;
   /// When set (e.g. AI chat), transcribed text is sent immediately instead of filling the field.
   final Future<void> Function(String text)? onAutoSend;
 
@@ -15,6 +19,7 @@ class VoiceMicButton extends StatefulWidget {
     required this.controller,
     this.appendWithSpace = true,
     this.onTranscribed,
+    this.languageOverride,
     this.onAutoSend,
   });
 
@@ -32,7 +37,9 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
     if (_voice.isRecording) {
       setState(() => _busy = true);
       try {
-        final text = await _voice.stopAndTranscribe();
+        final locale = Provider.of<LocaleProvider>(context, listen: false);
+        final lang = widget.languageOverride ?? (locale.isArabic ? 'ar' : 'en');
+        final text = await _voice.stopAndTranscribe(language: lang);
         if (widget.onAutoSend != null) {
           await widget.onAutoSend!(text);
         } else {
@@ -98,12 +105,14 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
 class VoiceMicSuffix extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback? onTranscribed;
+  final String? languageOverride;
   final Future<void> Function(String text)? onAutoSend;
 
   const VoiceMicSuffix({
     super.key,
     required this.controller,
     this.onTranscribed,
+    this.languageOverride,
     this.onAutoSend,
   });
 
@@ -112,6 +121,7 @@ class VoiceMicSuffix extends StatelessWidget {
     return VoiceMicButton(
       controller: controller,
       onTranscribed: onTranscribed,
+      languageOverride: languageOverride,
       onAutoSend: onAutoSend,
     );
   }

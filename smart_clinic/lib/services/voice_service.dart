@@ -17,9 +17,24 @@ const _englishGarbagePhrases = {
   'thanks for watching',
   'like and subscribe',
   'subtitles by the amara.org community',
+  'patient appointment doctor reception',
+  'patsient appointment doctor reception',
+  'medical clinic conversation',
 };
 
+bool _isPromptEcho(String text) {
+  final norm = text.toLowerCase().replaceAll(RegExp(r'[^\w\s\u0600-\u06FF]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  for (final marker in _englishGarbagePhrases) {
+    if (norm.contains(marker)) return true;
+  }
+  final words = norm.split(' ').where((w) => w.isNotEmpty).toSet();
+  const clinicWords = {'patient', 'patsient', 'appointment', 'doctor', 'reception', 'medical', 'clinic', 'conversation', 'english'};
+  if (words.intersection(clinicWords).length >= 4) return true;
+  return false;
+}
+
 bool _looksLikeArabicUiGarbageEnglish(String text) {
+  if (_isPromptEcho(text)) return true;
   final trimmed = text.trim();
   if (trimmed.isEmpty) return true;
   final lower = trimmed.toLowerCase();
@@ -99,6 +114,12 @@ class VoiceService {
     if (transcript.isEmpty) {
       throw Exception(
         'Could not detect speech. Speak clearly in Arabic or English for 2–3 seconds, then tap stop.',
+      );
+    }
+
+    if (_isPromptEcho(transcript)) {
+      throw Exception(
+        'Voice was not recognized. Speak clearly for 2–3 seconds in Arabic or English, then tap stop.',
       );
     }
 

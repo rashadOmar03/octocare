@@ -164,6 +164,17 @@ class _AiChatPanelState extends State<AiChatPanel> {
     }
   }
 
+  static final _arabicScript = RegExp(r'[\u0600-\u06FF]');
+
+  String _voiceLanguage() {
+    if (AppLocalizations.currentLocale == 'ar') return 'ar';
+    for (final m in _messages) {
+      if (_arabicScript.hasMatch(m['content'] ?? '')) return 'ar';
+    }
+    if (_arabicScript.hasMatch(widget.welcomeMessage)) return 'ar';
+    return 'en';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -233,6 +244,7 @@ class _AiChatPanelState extends State<AiChatPanel> {
             children: [
               VoiceMicButton(
                 controller: _messageController,
+                languageOverride: _voiceLanguage(),
                 onTranscribed: () {
                   if (mounted) setState(() {});
                   ScaffoldMessenger.of(context).showSnackBar(

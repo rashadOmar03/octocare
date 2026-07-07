@@ -69,17 +69,43 @@ def _latin_ratio(text: str) -> float:
     return latin / letters
 
 
-def _prompt_for_language(lang: str | None) -> str:
-    if lang == "ar":
-        return "محادثة عيادة طبية بالعربية. مريض، موعد، طبيب، است reception، عدد المرضى."
-    if lang == "en":
-        return "Medical clinic conversation in English. Patient appointment doctor reception."
-    return "Medical clinic. Arabic or English."
+# Whisper echoes these when audio is unclear — especially our old prompt text.
+_WHISPER_PROMPT_ECHO_MARKERS = (
+    "patient appointment doctor reception",
+    "patsient appointment",
+    "medical clinic conversation",
+    "medical clinic",
+    "محادثة عيادة طبية",
+    "مريض، موعد، طبيب",
+)
+
+
+def _normalize_for_echo_check(text: str) -> str:
+    lowered = (text or "").lower().strip()
+    lowered = re.sub(r"[^\w\s\u0600-\u06FF]", " ", lowered)
+    return re.sub(r"\s+", " ", lowered).strip()
+
+
+def _is_prompt_echo(transcript: str) -> bool:
+    norm = _normalize_for_echo_check(transcript)
+    if not norm:
+        return False
+    for marker in _WHISPER_PROMPT_ECHO_MARKERS:
+        if marker in norm:
+            return True
+    words = set(norm.split())
+    clinic_words = {"patient", "patsient", "appointment", "doctor", "reception", "medical", "clinic", "conversation", "english"}
+    if len(words & clinic_words) >= 4:
+        return True
+    return False
 
 
 def _is_garbage_transcript(transcript: str, *, requested_lang: str | None, audio_bytes: bytes | int) -> bool:
     cleaned = (transcript or "").strip()
     if not cleaned:
+        return True
+
+    if _is_prompt_echo(cleaned):
         return True
 
     lowered = cleaned.lower().rstrip(".,!?")
@@ -93,10 +119,8 @@ def _is_garbage_transcript(transcript: str, *, requested_lang: str | None, audio
         if phrase in lowered and len(lowered) < 80:
             return True
 
-    # User spoke Arabic (UI language ar) but Whisper returned English-only nonsense.
     if requested_lang == "ar":
         if not _contains_arabic(cleaned) and _latin_ratio(cleaned) > 0.85:
-            # Allow short Latin tokens only if they look like real clinic terms with digits.
             if not re.search(r"\d", cleaned):
                 return True
 
@@ -174,7 +198,7 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
     if len(audio_bytes) < 400:
         return {"transcript": "", "language": language or "en", "model": f"groq-{GROQ_WHISPER_MODEL}"}
 
-    def _call(lang: str | None, *, use_prompt: bool) -> dict:
+    def _call(lang: str | None) -> dict:
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(audio_bytes)
             tmp_path = tmp.name
@@ -187,8 +211,7 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
                     "response_format": "verbose_json",
                     "temperature": "0",
                 }
-                if use_prompt:
-                    data["prompt"] = _prompt_for_language(lang or language)
+                # Do NOT send prompt — Whisper echoes it as fake transcript on unclear audio.
                 if lang in ("ar", "en"):
                     data["language"] = lang
 
@@ -219,31 +242,31 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
             except OSError:
                 pass
 
-    # Never fall back to English when the user interface is Arabic — that causes hallucinations.
-    if language == "ar":
-        attempts: list[tuple[str | None, bool]] = [
-            ("ar", True),
-            ("ar", False),
-        ]
-    elif language == "en":
-        attempts = [
-            ("en", True),
-            ("en", False),
-        ]
-    else:
-        attempts = [
-            (None, True),
-            (None, False),
-        ]
+    def _pick_best(results: list[dict]) -> dict:
+        if not results:
+            return {"transcript": "", "language": language or "en", "model": f"groq-{GROQ_WHISPER_MODEL}"}
+        if language == "ar":
+            for r in results:
+                if _contains_arabic(r.get("transcript") or ""):
+                    return r
+        return max(results, key=lambda r: len(r.get("transcript") or ""))
 
-    last: dict = {"transcript": "", "language": language or "en", "model": f"groq-{GROQ_WHISPER_MODEL}"}
-    for lang, use_prompt in attempts:
-        result = _call(lang, use_prompt=use_prompt)
-        last = result
+    # Try requested language, then auto-detect. Never mix in the opposite language.
+    lang_attempts: list[str | None] = []
+    if language in ("ar", "en"):
+        lang_attempts.append(language)
+    lang_attempts.append(None)
+
+    collected: list[dict] = []
+    for lang in lang_attempts:
+        result = _call(lang)
         if result.get("transcript"):
-            return result
+            collected.append(result)
 
-    return last
+    if collected:
+        return _pick_best(collected)
+
+    return {"transcript": "", "language": language or "en", "model": f"groq-{GROQ_WHISPER_MODEL}"}
 
 
 def model_for_role(role: str) -> ModelSize:
