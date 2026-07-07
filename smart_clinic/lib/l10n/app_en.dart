@@ -517,7 +517,7 @@ class AppStringsEn {
     'prescription_due_date_required': 'Add a due date for this prescription before saving',
     'apply_due_date_all': 'Apply due date to all medications',
     'optional_field': 'Optional',
-    'voice_listening': 'Listening… tap mic again to stop and transcribe',
+    'voice_listening': 'Listening… tap mic again to stop and send',
     'voice_stop': 'Stop',
     'voice_speak': 'Speak',
     'voice_listen': 'Listen',

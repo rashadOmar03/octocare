@@ -245,15 +245,8 @@ class _AiChatPanelState extends State<AiChatPanel> {
               VoiceMicButton(
                 controller: _messageController,
                 languageOverride: _voiceLanguage(),
-                onTranscribed: () {
-                  if (mounted) setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(AppLocalizations.tr('voice_review_before_send')),
-                      duration: const Duration(seconds: 3),
-                    ),
-                  );
-                },
+                onAutoSend: _sendMessageWithText,
+                enabled: !_isLoading,
               ),
               Expanded(
                 child: TextField(

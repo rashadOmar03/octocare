@@ -13,6 +13,7 @@ class VoiceMicButton extends StatefulWidget {
   final String? languageOverride;
   /// When set (e.g. AI chat), transcribed text is sent immediately instead of filling the field.
   final Future<void> Function(String text)? onAutoSend;
+  final bool enabled;
 
   const VoiceMicButton({
     super.key,
@@ -21,6 +22,7 @@ class VoiceMicButton extends StatefulWidget {
     this.onTranscribed,
     this.languageOverride,
     this.onAutoSend,
+    this.enabled = true,
   });
 
   @override
@@ -64,7 +66,11 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.tr('voice_hold_longer')),
+            content: Text(
+              AppLocalizations.tr(
+                widget.onAutoSend != null ? 'voice_listening' : 'voice_hold_longer',
+              ),
+            ),
             duration: const Duration(seconds: 4),
           ),
         );
@@ -79,7 +85,7 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
     final recording = _voice.isRecording;
     return IconButton(
       tooltip: recording ? AppLocalizations.tr('voice_stop') : AppLocalizations.tr('voice_speak'),
-      onPressed: _busy ? null : _toggle,
+      onPressed: (_busy || !widget.enabled) ? null : _toggle,
       style: recording
           ? IconButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error.withValues(alpha: 0.15),
@@ -107,6 +113,7 @@ class VoiceMicSuffix extends StatelessWidget {
   final VoidCallback? onTranscribed;
   final String? languageOverride;
   final Future<void> Function(String text)? onAutoSend;
+  final bool enabled;
 
   const VoiceMicSuffix({
     super.key,
@@ -114,6 +121,7 @@ class VoiceMicSuffix extends StatelessWidget {
     this.onTranscribed,
     this.languageOverride,
     this.onAutoSend,
+    this.enabled = true,
   });
 
   @override
@@ -123,6 +131,7 @@ class VoiceMicSuffix extends StatelessWidget {
       onTranscribed: onTranscribed,
       languageOverride: languageOverride,
       onAutoSend: onAutoSend,
+      enabled: enabled,
     );
   }
 }

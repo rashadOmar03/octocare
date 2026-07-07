@@ -517,7 +517,7 @@ class AppStringsAr {
     'prescription_due_date_required': 'أضف تاريخ انتهاء للوصفة قبل الحفظ',
     'apply_due_date_all': 'تطبيق تاريخ الانتهاء على جميع الأدوية',
     'optional_field': 'اختياري',
-    'voice_listening': 'جاري الاستماع… اضغط الميكروفون مرة أخرى للإيقاف والتحويل',
+    'voice_listening': 'جاري الاستماع… اضغط الميكروفون مرة أخرى للإيقاف والإرسال',
     'voice_stop': 'إيقاف',
     'voice_speak': 'تحدث',
     'voice_listen': 'استمع',
