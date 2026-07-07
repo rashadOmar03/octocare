@@ -1207,7 +1207,14 @@ async def transcribe_voice(
             status_code=503,
             detail="Voice input is not configured. Set GROQ_API_KEY or install faster-whisper.",
         )
+    import logging as _logging
+    _log = _logging.getLogger("voice")
+
     audio_bytes = await file.read()
+    _log.info(
+        "[Voice] /transcribe file=%s size=%d language=%s role=%s",
+        file.filename, len(audio_bytes), language, current_user.role,
+    )
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio file")
     if len(audio_bytes) < 400:
@@ -1232,7 +1239,11 @@ async def transcribe_voice(
             language=lang,
         )
     except Exception as exc:
+        _log.error("[Voice] Transcription exception: %s", exc)
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
+
+    _log.info("[Voice] Result: transcript=%r lang=%s model=%s",
+              (result.get("transcript") or "")[:100], result.get("language"), result.get("model"))
 
     if not result.get("transcript"):
         raise HTTPException(

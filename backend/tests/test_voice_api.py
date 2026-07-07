@@ -241,17 +241,14 @@ def test_whisper_hallucination_you_on_short_audio():
     assert _is_arabic_hallucination("عندي كام مريض ودكتور") is False
 
 
-def test_whisper_segment_confidence_filter():
-    from voice_service import _whisper_segments_trustworthy
+def test_arabic_hallucination_filter():
+    from voice_service import _is_arabic_hallucination
 
-    assert _whisper_segments_trustworthy(
-        {"segments": [{"text": "مرحبا", "no_speech_prob": 0.1, "avg_logprob": -0.4, "compression_ratio": 1.2}]},
-        audio_bytes=8000,
-    ) is True
-    assert _whisper_segments_trustworthy(
-        {"segments": [{"text": "ترجمة", "no_speech_prob": 0.9, "avg_logprob": -2.0, "compression_ratio": 3.0}]},
-        audio_bytes=5000,
-    ) is False
+    assert _is_arabic_hallucination("ترجمة نانسي قطر") is True
+    assert _is_arabic_hallucination("اشترك في القناة") is True
+    assert _is_arabic_hallucination("ترجمة آلاء") is True
+    assert _is_arabic_hallucination("عندي كام مريض") is False
+    assert _is_arabic_hallucination("Hello") is False
 
 
 @patch("routers.ai_router._call_model")

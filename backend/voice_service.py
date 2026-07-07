@@ -125,28 +125,27 @@ def _is_arabic_hallucination(transcript: str) -> bool:
     return False
 
 
-def _whisper_segments_trustworthy(body: dict, *, audio_bytes: bytes | int) -> bool:
-    """Use Whisper segment stats to reject low-confidence hallucinations."""
+def _log_whisper_segments(body: dict, *, audio_size: int, language: str | None) -> None:
+    """Log Whisper segment stats for debugging — no rejection."""
     segments = body.get("segments") or []
-    if not segments:
-        return True
-
-    size = audio_bytes if isinstance(audio_bytes, int) else len(audio_bytes)
-    for seg in segments:
-        text = (seg.get("text") or "").strip()
-        if not text:
-            continue
-        no_speech = float(seg.get("no_speech_prob") or 0.0)
-        avg_logprob = float(seg.get("avg_logprob") or 0.0)
-        compression = float(seg.get("compression_ratio") or 0.0)
-
-        if no_speech > 0.75 and size < 12000:
-            return False
-        if avg_logprob < -1.15 and size < 16000:
-            return False
-        if compression > 2.4:
-            return False
-    return True
+    text = (body.get("text") or "").strip()
+    logger.info(
+        "[Voice] Groq returned text=%r lang=%s segments=%d audio_size=%d requested_lang=%s",
+        text[:120] if text else "",
+        body.get("language"),
+        len(segments),
+        audio_size,
+        language,
+    )
+    for i, seg in enumerate(segments[:3]):
+        logger.info(
+            "[Voice]   seg[%d] text=%r no_speech=%.2f logprob=%.2f compression=%.2f",
+            i,
+            (seg.get("text") or "")[:60],
+            float(seg.get("no_speech_prob") or 0),
+            float(seg.get("avg_logprob") or 0),
+            float(seg.get("compression_ratio") or 0),
+        )
 
 
 def _normalize_audio_for_whisper(audio_bytes: bytes, suffix: str) -> tuple[bytes, str]:
@@ -339,9 +338,9 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
             body = resp.json()
             transcript = (body.get("text") or "").strip()
             detected = _normalize_language(body.get("language"), fallback=lang or language or "en")
-            if not _whisper_segments_trustworthy(body, audio_bytes=audio_bytes):
-                transcript = ""
-            elif _is_garbage_transcript(transcript, requested_lang=language, audio_bytes=audio_bytes):
+            _log_whisper_segments(body, audio_size=len(audio_bytes), language=language)
+            if _is_garbage_transcript(transcript, requested_lang=language, audio_bytes=audio_bytes):
+                logger.info("[Voice] Rejected as garbage: %r", transcript[:80])
                 transcript = ""
             return {
                 "transcript": transcript,
