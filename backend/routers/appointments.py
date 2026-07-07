@@ -23,7 +23,14 @@ from appointment_rules import (
 )
 from audit_service import log_audit
 from clinic_time import clinic_today, upcoming_from_date
-from clinic_schedule import is_clinic_open, parse_working_days, working_days_label
+from clinic_schedule import (
+    is_clinic_open,
+    parse_working_days,
+    working_days_label,
+    resolve_doctor_schedule_for_date,
+    get_doctor_vacation_on_date,
+    normalize_time_hhmm,
+)
 from access_control import (
     assert_appointment_read,
     assert_appointment_patient_action,
@@ -299,10 +306,14 @@ def get_doctors_public(
 
 def _generate_slots(start: str, end: str, duration: int) -> list[str]:
     slots = []
+    start = normalize_time_hhmm(start, default="09:00")
+    end = normalize_time_hhmm(end, default="17:00")
     sh, sm = map(int, start.split(":"))
     eh, em = map(int, end.split(":"))
     current = sh * 60 + sm
     end_min = eh * 60 + em
+    if end_min <= current:
+        return slots
     while current + duration <= end_min:
         h, m = divmod(current, 60)
         slots.append(f"{h:02d}:{m:02d}")
@@ -484,6 +495,26 @@ def list_appointments(
     return [_enrich_appointment(apt, db) for apt in appointments]
 
 
+def _empty_slots_response(
+    db: Session,
+    settings: ClinicSettings | None,
+    *,
+    reason: str | None = None,
+    vacation_reason: str | None = None,
+) -> dict:
+    label = working_days_label(settings.working_days if settings else None)
+    return {
+        "slots": [],
+        "doctor_on_vacation": reason == "vacation",
+        "clinic_closed": reason == "clinic_closed",
+        "doctor_day_off": reason == "doctor_day_off",
+        "all_slots_booked": reason == "all_slots_booked",
+        "reason": reason,
+        "vacation_reason": vacation_reason,
+        "working_days_label": label,
+    }
+
+
 @router.get("/available-slots")
 def available_slots(
     doctor_id: str = Query(...),
@@ -493,48 +524,48 @@ def available_slots(
     auto_cancel_expired_appointments(db)
 
     tomorrow = date.today() + timedelta(days=1)
-    if slot_date < tomorrow:
-        return {"slots": []}
-
     settings = db.query(ClinicSettings).first()
-    if not is_clinic_open(slot_date, settings):
-        return {"slots": []}
+    if slot_date < tomorrow:
+        return _empty_slots_response(db, settings, reason="too_soon")
 
     doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    day_of_week = slot_date.weekday()
-    schedule = (
-        db.query(DoctorSchedule)
-        .filter(
-            DoctorSchedule.doctor_id == doctor_id,
-            DoctorSchedule.day_of_week == day_of_week,
-            DoctorSchedule.is_available == True,
-        )
-        .first()
-    )
-    if not schedule:
-        return {"slots": [], "doctor_on_vacation": False}
-
-    from clinic_schedule import is_doctor_on_vacation, get_doctor_vacation_on_date
-
-    if is_doctor_on_vacation(db, doctor_id, slot_date):
+    schedule, block_reason = resolve_doctor_schedule_for_date(db, doctor_id, slot_date, settings)
+    if block_reason == "vacation":
         off = get_doctor_vacation_on_date(db, doctor_id, slot_date)
-        return {
-            "slots": [],
-            "doctor_on_vacation": True,
-            "vacation_reason": off.reason if off else None,
-        }
+        return _empty_slots_response(
+            db,
+            settings,
+            reason="vacation",
+            vacation_reason=off.reason if off else None,
+        )
+    if block_reason or not schedule:
+        return _empty_slots_response(db, settings, reason=block_reason or "doctor_day_off")
 
     duration = settings.appointment_duration if settings else 30
     all_slots = _generate_slots(schedule.start_time, schedule.end_time, duration)
+    if not all_slots:
+        return _empty_slots_response(db, settings, reason="no_schedule_hours")
 
     free = [
         s for s in all_slots
         if is_slot_available(db, doctor_id, slot_date, s)
     ]
-    return {"slots": free, "doctor_on_vacation": False}
+    if not free and all_slots:
+        return _empty_slots_response(db, settings, reason="all_slots_booked")
+
+    label = working_days_label(settings.working_days if settings else None)
+    return {
+        "slots": free,
+        "doctor_on_vacation": False,
+        "clinic_closed": False,
+        "doctor_day_off": False,
+        "all_slots_booked": False,
+        "reason": None,
+        "working_days_label": label,
+    }
 
 
 @router.get("/{appointment_id}")

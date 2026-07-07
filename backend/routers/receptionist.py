@@ -45,7 +45,7 @@ from otp_service import create_and_send_otp
 from email_service import send_patient_welcome_email
 from profile_utils import profile_personal_info_complete
 from clinic_time import clinic_today, clinic_now, upcoming_from_date
-from clinic_schedule import is_clinic_open
+from clinic_schedule import resolve_doctor_schedule_for_date
 
 router = APIRouter()
 
@@ -573,22 +573,10 @@ def receptionist_available_slots(
         return {"slots": []}
 
     settings = db.query(ClinicSettings).first()
-    if not is_clinic_open(slot_date, settings):
+    schedule, block_reason = resolve_doctor_schedule_for_date(db, doctor_id, slot_date, settings)
+    if block_reason or not schedule:
         return {"slots": []}
 
-    schedule = (
-        db.query(DoctorSchedule)
-        .filter(
-            DoctorSchedule.doctor_id == doctor_id,
-            DoctorSchedule.day_of_week == slot_date.weekday(),
-            DoctorSchedule.is_available == True,
-        )
-        .first()
-    )
-    if not schedule:
-        return {"slots": []}
-
-    settings = db.query(ClinicSettings).first()
     duration = settings.appointment_duration if settings else 30
     all_slots = _generate_slots(schedule.start_time, schedule.end_time, duration)
     free = [s for s in all_slots if is_slot_available(db, doctor_id, slot_date, s)]

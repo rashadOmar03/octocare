@@ -171,6 +171,20 @@ def run_startup_maintenance(db: Session) -> None:
     except Exception as exc:
         db.rollback()
         print(f"[Octocare Clinic] Schedule sync warning: {exc}")
+
+    try:
+        from clinic_schedule import repair_doctor_with_no_available_days
+        from models import Doctor
+
+        repaired = 0
+        for doctor in db.query(Doctor).all():
+            if repair_doctor_with_no_available_days(db, doctor.id):
+                repaired += 1
+        if repaired:
+            print(f"[Octocare Clinic] Restored default hours for {repaired} doctor(s)")
+    except Exception as exc:
+        db.rollback()
+        print(f"[Octocare Clinic] Doctor schedule repair warning: {exc}")
     from routers.records import sync_prescriptions_from_records
     from routers.prescriptions import expire_prescriptions
 

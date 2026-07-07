@@ -27,6 +27,8 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   List<Map<String, dynamic>> _slots = [];
   bool _doctorOnVacation = false;
   String? _vacationReason;
+  String? _slotsBlockReason;
+  String? _slotsWorkingDaysLabel;
 
   dynamic _selectedSpecialtyId;
   String? _selectedSpecialtyName;
@@ -113,12 +115,19 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       final dateStr = '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}';
       final result = await _appointmentService.fetchAvailableSlots(_selectedDoctor!.id!, dateStr);
       _slots = (result['slots'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-      _doctorOnVacation = result['doctor_on_vacation'] == true;
+      _doctorOnVacation = result['doctor_on_vacation'] == true || result['reason'] == 'vacation';
       _vacationReason = result['vacation_reason']?.toString();
+      _slotsBlockReason = result['reason']?.toString();
+      _slotsWorkingDaysLabel = result['working_days_label']?.toString();
+      final apiDays = result['working_days_label'];
+      if (apiDays != null && apiDays.toString().isNotEmpty) {
+        _workingDaysLabel = apiDays.toString();
+      }
     } catch (_) {
       _slots = [];
       _doctorOnVacation = false;
       _vacationReason = null;
+      _slotsBlockReason = null;
     }
     setState(() => _isLoading = false);
   }
@@ -504,6 +513,24 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       );
     }
     if (_slots.isEmpty) {
+      final daysLabel = _slotsWorkingDaysLabel ?? _workingDaysLabel;
+      String message;
+      switch (_slotsBlockReason) {
+        case 'clinic_closed':
+          message = AppLocalizations.tr('clinic_closed_day');
+          break;
+        case 'doctor_day_off':
+          message = AppLocalizations.tr('doctor_day_off');
+          break;
+        case 'all_slots_booked':
+          message = AppLocalizations.tr('all_slots_booked');
+          break;
+        case 'no_schedule_hours':
+          message = AppLocalizations.tr('doctor_hours_not_set');
+          break;
+        default:
+          message = AppLocalizations.tr('no_slots_available').replaceAll('{days}', daysLabel);
+      }
       return Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -511,10 +538,18 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
             Icon(Icons.event_busy, size: 48, color: Theme.of(context).colorScheme.error.withValues(alpha: 0.5)),
             const SizedBox(height: 8),
             Text(
-              AppLocalizations.tr('no_slots_available').replaceAll('{days}', _workingDaysLabel),
+              message,
               style: Theme.of(context).textTheme.bodyLarge,
               textAlign: TextAlign.center,
             ),
+            if (_slotsBlockReason == 'clinic_closed' || _slotsBlockReason == null) ...[
+              const SizedBox(height: 8),
+              Text(
+                '${AppLocalizations.tr('working_days')}: $daysLabel',
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+            ],
           ],
         ),
       );

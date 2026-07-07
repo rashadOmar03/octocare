@@ -110,11 +110,24 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
       if (schedules.isNotEmpty) {
         start = schedules.first['start_time']?.toString() ?? start;
         end = schedules.first['end_time']?.toString() ?? end;
+      } else {
+        try {
+          final clinic = await _service.getSettings();
+          start = clinic['working_hours_start']?.toString() ?? start;
+          end = clinic['working_hours_end']?.toString() ?? end;
+          final rawDays = (clinic['working_days']?.toString() ?? '5,6,0,1,2,3').split(',');
+          for (final part in rawDays) {
+            final day = int.tryParse(part.trim());
+            if (day != null) _dayAvailable[day] = true;
+          }
+        } catch (_) {}
       }
       _startHourController.text = start;
       _endHourController.text = end;
       for (final day in _dayOrder) {
-        _dayAvailable[day] = false;
+        if (schedules.isNotEmpty) {
+          _dayAvailable[day] = false;
+        }
       }
       for (final row in schedules) {
         final day = row['day_of_week'] is int ? row['day_of_week'] as int : int.tryParse('${row['day_of_week']}') ?? -1;

@@ -74,8 +74,13 @@ class AppointmentService {
         .toList();
     return {
       'slots': slots,
-      'doctor_on_vacation': response['doctor_on_vacation'] == true,
+      'doctor_on_vacation': response['doctor_on_vacation'] == true || response['reason'] == 'vacation',
       'vacation_reason': response['vacation_reason']?.toString(),
+      'reason': response['reason']?.toString(),
+      'clinic_closed': response['clinic_closed'] == true,
+      'doctor_day_off': response['doctor_day_off'] == true,
+      'all_slots_booked': response['all_slots_booked'] == true,
+      'working_days_label': response['working_days_label']?.toString(),
     };
   }
 

@@ -205,3 +205,96 @@ def sync_all_doctors_hours_from_clinic(db: Session, settings: ClinicSettings) ->
             settings.working_hours_end,
         )
     return changed
+
+
+def normalize_time_hhmm(raw: str | None, *, default: str = "09:00") -> str:
+    """Normalize HH:MM (also accepts H:MM)."""
+    if not raw or not str(raw).strip():
+        return default
+    text = str(raw).strip().split()[0]
+    parts = text.split(":")
+    if len(parts) < 2:
+        return default
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except ValueError:
+        return default
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return default
+    return f"{hour:02d}:{minute:02d}"
+
+
+def repair_doctor_with_no_available_days(db: Session, doctor_id: str) -> bool:
+    """If every clinic working day is off for a doctor, restore clinic default hours."""
+    settings = db.query(ClinicSettings).first()
+    working = parse_working_days(settings.working_days if settings else None)
+    rows = (
+        db.query(DoctorSchedule)
+        .filter(
+            DoctorSchedule.doctor_id == doctor_id,
+            DoctorSchedule.day_of_week.in_(working),
+        )
+        .all()
+    )
+    if not rows or any(r.is_available for r in rows):
+        return False
+    start = normalize_time_hhmm(settings.working_hours_start if settings else None, default="09:00")
+    end = normalize_time_hhmm(settings.working_hours_end if settings else None, default="17:00")
+    for row in rows:
+        row.is_available = True
+        row.start_time = start
+        row.end_time = end
+    db.commit()
+    return True
+
+
+def resolve_doctor_schedule_for_date(
+    db: Session,
+    doctor_id: str,
+    slot_date: date,
+    settings: ClinicSettings | None,
+) -> tuple[DoctorSchedule | None, str | None]:
+    """
+    Resolve the doctor's schedule for a booking date.
+    Returns (schedule, block_reason) where block_reason is one of:
+    clinic_closed, vacation, doctor_day_off, or None when bookable.
+    """
+    if not is_clinic_open(slot_date, settings):
+        return None, "clinic_closed"
+
+    if is_doctor_on_vacation(db, doctor_id, slot_date):
+        return None, "vacation"
+
+    ensure_doctor_schedules(db, [doctor_id])
+    repair_doctor_with_no_available_days(db, doctor_id)
+
+    day = slot_date.weekday()
+    row = (
+        db.query(DoctorSchedule)
+        .filter(
+            DoctorSchedule.doctor_id == doctor_id,
+            DoctorSchedule.day_of_week == day,
+        )
+        .first()
+    )
+    if row and row.is_available:
+        row.start_time = normalize_time_hhmm(row.start_time, default="09:00")
+        row.end_time = normalize_time_hhmm(row.end_time, default="17:00")
+        return row, None
+    if row and not row.is_available:
+        return None, "doctor_day_off"
+
+    start = normalize_time_hhmm(settings.working_hours_start if settings else None, default="09:00")
+    end = normalize_time_hhmm(settings.working_hours_end if settings else None, default="17:00")
+    row = DoctorSchedule(
+        doctor_id=doctor_id,
+        day_of_week=day,
+        start_time=start,
+        end_time=end,
+        is_available=True,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row, None
