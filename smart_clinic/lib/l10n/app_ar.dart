@@ -427,6 +427,7 @@ class AppStringsAr {
     'reject_notes_body': 'سيؤدي هذا إلى مسح النص وحقول SOAP. يمكنك الاستخراج مرة أخرى لاحقاً.',
     'reject_clear': 'رفض',
     'alter_manually': 'تعديل يدوي',
+    'manual_edit_enabled': 'تم تفعيل التعديل اليدوي — مرّر لأسفل لأقسام SOAP.',
     'confirm_save_history': 'تأكيد وحفظ في السجل',
     'search_patients_hint': 'ابحث بالاسم أو البريد أو الهاتف (حرفان على الأقل)',
     'patient_required': 'اختر موعد مريض أولاً',

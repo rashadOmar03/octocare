@@ -32,6 +32,9 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
   final _soapOController = TextEditingController();
   final _soapAController = TextEditingController();
   final _soapPController = TextEditingController();
+  final _scrollController = ScrollController();
+  final _soapSectionKey = GlobalKey();
+  int _soapViewGeneration = 0;
 
   bool _isLoading = false;
   bool _soapEditable = false;
@@ -62,6 +65,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
   bool get _hasSavedRecord => _recordId != null || _recordLoaded || _appointment?.medicalRecordId != null;
   bool get _isStandalone => _appointment == null && _standalonePatient != null;
   Map<String, dynamic>? _standalonePatient;
+  bool _needsListRefresh = false;
 
   Future<void> _bootstrap() async {
     final args = ModalRoute.of(context)?.settings.arguments;
@@ -77,21 +81,30 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
     }
     if (_appointment == null && _standalonePatient == null) return;
 
-    if (_appointment != null &&
-        (_appointment!.hasConsultation ||
-            _appointment!.medicalRecordId != null ||
-            _appointment!.status == 'completed')) {
+    await _refreshAppointmentFromServer();
+    if (_appointment?.id != null || _appointment?.medicalRecordId != null) {
       await _loadExistingRecord();
     }
+  }
+
+  Future<void> _refreshAppointmentFromServer() async {
+    if (_appointment?.id == null) return;
+    try {
+      final data = Map<String, dynamic>.from(
+        await ApiService.instance.get('/appointments/${_appointment!.id}'),
+      );
+      _appointment = Appointment.fromJson(data);
+    } catch (_) {}
   }
 
   Future<void> _loadExistingRecord() async {
     setState(() => _isLoading = true);
     try {
       Map<String, dynamic> data;
-      if (_appointment?.medicalRecordId != null) {
+      final recordId = _recordId ?? _appointment?.medicalRecordId;
+      if (recordId != null) {
         data = Map<String, dynamic>.from(
-          await ApiService.instance.get('/records/${_appointment!.medicalRecordId}'),
+          await ApiService.instance.get('/records/$recordId'),
         );
       } else if (_appointment?.id != null) {
         data = Map<String, dynamic>.from(
@@ -106,14 +119,16 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
         _recordLoaded = true;
         _hasExtracted = true;
         _soapEditable = true;
+        _soapViewGeneration++;
       });
     } catch (e) {
       if (_appointment?.status == 'completed' && mounted) {
         showErrorSnackBar(context, AppLocalizations.tr('no_consultation_to_edit'));
         Navigator.pop(context);
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-    if (mounted) setState(() => _isLoading = false);
   }
 
   void _onStructuredChanged({
@@ -179,7 +194,13 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
     _soapOController.text = (data['soap_objective'] ?? '').toString();
     _soapAController.text = (data['soap_assessment'] ?? '').toString();
     _soapPController.text = (data['soap_plan'] ?? '').toString();
-    final structured = data['structured_data'];
+    final structuredRaw = data['structured_data'];
+    dynamic structured = structuredRaw;
+    if (structured is String && structured.trim().isNotEmpty) {
+      try {
+        structured = jsonDecode(structured);
+      } catch (_) {}
+    }
     if (structured is Map) {
       _structuredData = Map<String, dynamic>.from(structured);
       final prescription = _structuredData?['prescription'];
@@ -221,6 +242,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
   @override
   void dispose() {
     _tabController.dispose();
+    _scrollController.dispose();
     _reviewPromptController.dispose();
     _transcriptController.dispose();
     _chiefComplaintController.dispose();
@@ -630,6 +652,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
           _recordLoaded = true;
           _hasExtracted = true;
           _soapEditable = true;
+          _needsListRefresh = true;
         });
       }
 
@@ -710,6 +733,42 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
     );
   }
 
+  void _enableManualEdit() {
+    setState(() {
+      _soapEditable = true;
+      _hasExtracted = true;
+      _structuredData ??= {
+        'soap_note': {
+          'subjective': '',
+          'objective': <String, dynamic>{},
+          'assessment': <dynamic>[],
+          'plan': <dynamic>[],
+        },
+        'symptoms': <dynamic>[],
+        'diagnoses': <dynamic>[],
+        'prescription': <dynamic>[],
+        'medications_current': <dynamic>[],
+      };
+      _soapViewGeneration++;
+    });
+    if (_tabController.index != 0) {
+      _tabController.animateTo(0);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _soapSectionKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+    if (mounted) {
+      showSuccessSnackBar(context, AppLocalizations.tr('manual_edit_enabled'));
+    }
+  }
+
   void _clearAll() {
     _transcriptController.clear();
     _chiefComplaintController.clear();
@@ -742,7 +801,13 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
   Widget build(BuildContext context) {
     final tabHeight = (MediaQuery.sizeOf(context).height * 0.42).clamp(280.0, 480.0);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        Navigator.pop(context, _needsListRefresh || _recordId != null);
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Text(_isEditOnly ? AppLocalizations.tr('edit_consultation') : AppLocalizations.tr('consultation')),
         actions: [
@@ -755,6 +820,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
         ],
       ),
       body: SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -859,12 +925,15 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
             ],
             if (_hasExtracted || _soapEditable || _recordLoaded || _isEditOnly) ...[
               const SizedBox(height: 16),
-              TabBar(
+              KeyedSubtree(
+                key: _soapSectionKey,
+                child: TabBar(
                 controller: _tabController,
                 tabs: [
                   Tab(text: AppLocalizations.tr('ai_extraction')),
                   Tab(text: AppLocalizations.tr('ai_review')),
                 ],
+              ),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -874,6 +943,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
                   children: [
                     SingleChildScrollView(
                       child: StructuredSoapView(
+                        key: ValueKey('soap_view_$_soapViewGeneration'),
                         structured: _structuredData,
                         prescription: _prescription,
                         currentMedications: _currentMedications,
@@ -951,7 +1021,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
                     if (_hasExtracted && !_isEditOnly) const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _isLoading ? null : () => setState(() => _soapEditable = true),
+                        onPressed: _isLoading ? null : _enableManualEdit,
                         icon: const Icon(Icons.edit),
                         label: Text(AppLocalizations.tr('alter_manually')),
                       ),
@@ -978,6 +1048,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
           ),
         ),
       ),
+    ),
     );
   }
 }

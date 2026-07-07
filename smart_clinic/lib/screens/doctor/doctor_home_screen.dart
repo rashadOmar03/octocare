@@ -101,13 +101,19 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   Widget _consultationTrailing(Appointment a) {
     if (a.isConsultationEditable) {
       return ElevatedButton(
-        onPressed: () => openDoctorConsultation(context, a),
+        onPressed: () async {
+          final changed = await openDoctorConsultation(context, a);
+          if (changed == true && mounted) _loadData();
+        },
         child: Text(AppLocalizations.tr('start_consultation')),
       );
     }
     if (a.isConsultationEditOnly) {
       return OutlinedButton(
-        onPressed: () => openDoctorConsultation(context, a),
+        onPressed: () async {
+          final changed = await openDoctorConsultation(context, a);
+          if (changed == true && mounted) _loadData();
+        },
         child: Text(AppLocalizations.tr('edit_consultation')),
       );
     }
@@ -279,7 +285,10 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                             ),
                             trailing: _consultationTrailing(a),
                             onTap: (a.isConsultationEditable || a.isConsultationEditOnly)
-                                ? () => openDoctorConsultation(context, a)
+                                ? () async {
+                                    final changed = await openDoctorConsultation(context, a);
+                                    if (changed == true && mounted) _loadData();
+                                  }
                                 : null,
                           ),
                         )),

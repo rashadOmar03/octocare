@@ -427,6 +427,7 @@ class AppStringsEn {
     'reject_notes_body': 'This clears the transcript and SOAP fields. You can extract again later.',
     'reject_clear': 'Reject',
     'alter_manually': 'Edit manually',
+    'manual_edit_enabled': 'Manual editing enabled — scroll to SOAP sections below.',
     'confirm_save_history': 'Confirm & save to history',
     'search_patients_hint': 'Search by name, email, or phone (min 2 characters)',
     'patient_required': 'Select a patient appointment first',
