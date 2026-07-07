@@ -42,36 +42,58 @@ class NotificationIconState extends State<NotificationIcon> {
 
   Color _iconColor(BuildContext context) {
     if (widget.iconColor != null) return widget.iconColor!;
-    final appBar = Theme.of(context).appBarTheme;
-    if (appBar.foregroundColor != null) return appBar.foregroundColor!;
-    return Theme.of(context).brightness == Brightness.dark ? Colors.white : const Color(0xFF212121);
+    final appBarFg = Theme.of(context).appBarTheme.foregroundColor;
+    if (appBarFg != null) return appBarFg;
+    return Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.white;
+  }
+
+  Color _badgeBorderColor(BuildContext context) {
+    final appBarBg = Theme.of(context).appBarTheme.backgroundColor;
+    if (appBarBg != null) return appBarBg;
+    return Theme.of(context).colorScheme.surface;
   }
 
   @override
   Widget build(BuildContext context) {
     final iconColor = _iconColor(context);
-    final bellIcon = Icon(
-      _unreadCount > 0 ? Icons.notifications_rounded : Icons.notifications_outlined,
-      color: iconColor,
-    );
+    final badgeColor = _badgeColor(context);
+    final badgeBorder = _badgeBorderColor(context);
 
     return Padding(
       padding: const EdgeInsetsDirectional.only(end: 8),
       child: IconButton(
-        tooltip: MaterialLocalizations.of(context).showMenuTooltip,
-        style: IconButton.styleFrom(foregroundColor: iconColor),
+        tooltip: 'Notifications',
         onPressed: widget.onPressed,
-        icon: Badge(
-          isLabelVisible: _unreadCount > 0,
-          offset: const Offset(4, -4),
-          backgroundColor: _badgeColor(context),
-          textColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-          label: Text(
-            _unreadCount > 99 ? '99+' : '$_unreadCount',
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, height: 1.1),
-          ),
-          child: bellIcon,
+        icon: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Icon(Icons.notifications, color: iconColor, size: 26),
+            if (_unreadCount > 0)
+              Positioned(
+                right: -2,
+                top: -4,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: badgeColor,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: badgeBorder, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _unreadCount > 99 ? '99+' : '$_unreadCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

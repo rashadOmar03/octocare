@@ -143,6 +143,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
         actions: [
           NotificationIcon(
             key: _notifKey,
+            iconColor: Colors.white,
             onPressed: () async {
               await Navigator.pushNamed(context, AppRoutes.doctorNotifications);
               _notifKey.currentState?.refresh();

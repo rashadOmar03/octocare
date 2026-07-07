@@ -31,6 +31,7 @@ class ReceptionistScaffold extends StatelessWidget {
       ...?actions,
       if (showNotifications)
         NotificationIcon(
+          iconColor: Colors.white,
           onPressed: () => Navigator.pushNamed(context, AppRoutes.receptionistNotifications),
         ),
     ];

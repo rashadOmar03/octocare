@@ -97,6 +97,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         actions: [
           NotificationIcon(
             key: _notifKey,
+            iconColor: Colors.white,
             onPressed: () async {
               await Navigator.pushNamed(context, AppRoutes.adminNotifications);
               _notifKey.currentState?.refresh();
