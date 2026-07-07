@@ -18,6 +18,7 @@ from schemas import (
     ReceptionistRevenueSummary,
 )
 from auth import hash_password, require_role
+from otp_service import create_and_send_otp
 from appointment_rules import (
     auto_cancel_expired_appointments,
     is_slot_available,
@@ -635,7 +636,7 @@ def register_patient(
         password_hash=hash_password(temp_password),
         role="patient",
         must_change_password=True,
-        email_verified=True,
+        email_verified=False,
     )
     db.add(user)
 
@@ -667,13 +668,16 @@ def register_patient(
     except Exception:
         welcome_sent = False
 
+    otp_sent = create_and_send_otp(db, email, "signup", background_tasks)
+
     db.add(Notification(
         id=str(uuid.uuid4()),
         user_id=user_id,
         title="Account created",
         message=(
-            f"Welcome {data.first_name}! Your temporary password is: {temp_password}. "
-            "Log in and change your password."
+            f"Welcome {data.first_name}! A 6-digit verification code was sent to {email}. "
+            f"Temporary password: {temp_password}. "
+            "Sign in with your email and temporary password, then enter the code to verify your email before accessing your account."
         ),
     ))
     _notify_staff(
@@ -694,16 +698,21 @@ def register_patient(
     db.commit()
 
     return {
-        "message": "Patient registered successfully. They can log in with the temporary password.",
+        "message": (
+            "Patient registered. A verification code was sent to their email. "
+            "They must verify before signing in."
+            if otp_sent
+            else "Patient registered but verification email could not be sent. Use Resend code from login."
+        ),
         "user_id": user_id,
         "profile_id": profile.id,
         "patient_name": f"{profile.first_name or ''} {profile.last_name or ''}".strip(),
         "email": email,
         "temp_password": temp_password,
         "temporary_password": temp_password,
-        "otp_sent": False,
+        "otp_sent": otp_sent,
         "welcome_email_sent": welcome_sent,
-        "login_blocked_until_verified": False,
+        "login_blocked_until_verified": True,
     }
 
 

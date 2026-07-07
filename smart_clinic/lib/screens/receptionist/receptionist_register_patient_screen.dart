@@ -33,6 +33,7 @@ class _ReceptionistRegisterPatientScreenState extends State<ReceptionistRegister
   String? _tempPassword;
   bool _registrationComplete = false;
   bool _welcomeEmailSent = true;
+  bool _otpSent = true;
   String? _registeredProfileId;
   String? _registeredPatientName;
 
@@ -105,6 +106,7 @@ class _ReceptionistRegisterPatientScreenState extends State<ReceptionistRegister
       setState(() {
         _tempPassword = response['temp_password'] ?? response['temporary_password'] ?? response['password'];
         _welcomeEmailSent = response['welcome_email_sent'] != false;
+        _otpSent = response['otp_sent'] != false;
         _registeredProfileId = response['profile_id']?.toString();
         _registeredPatientName = response['patient_name']?.toString() ??
             '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'.trim();
@@ -112,6 +114,11 @@ class _ReceptionistRegisterPatientScreenState extends State<ReceptionistRegister
       });
       if (mounted) {
         showSuccessSnackBar(context, AppLocalizations.tr('account_created'));
+        if (_otpSent) {
+          showSuccessSnackBar(context, AppLocalizations.tr('otp_sent_to_patient'));
+        } else {
+          showErrorSnackBar(context, AppLocalizations.tr('otp_send_failed'));
+        }
         if (!_welcomeEmailSent) {
           showErrorSnackBar(context, AppLocalizations.tr('welcome_email_failed'));
         }
@@ -147,6 +154,12 @@ class _ReceptionistRegisterPatientScreenState extends State<ReceptionistRegister
                         SelectableText('${AppLocalizations.tr('temp_password')}: $_tempPassword', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         Text(AppLocalizations.tr('login_blocked_until_verified'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: const Color(0xFFD32F2F), fontWeight: FontWeight.w600), textAlign: TextAlign.center),
+                        const SizedBox(height: 4),
+                        Text(
+                          _otpSent ? AppLocalizations.tr('otp_sent_to_patient') : AppLocalizations.tr('otp_send_failed'),
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
                         const SizedBox(height: 4),
                         Text(AppLocalizations.tr('patient_must_verify_email'), style: Theme.of(context).textTheme.bodyMedium, textAlign: TextAlign.center),
                         const SizedBox(height: 12),

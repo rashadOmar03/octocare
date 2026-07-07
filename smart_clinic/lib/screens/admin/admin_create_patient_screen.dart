@@ -31,6 +31,8 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
   bool _isLoading = false;
   String? _tempPassword;
   bool _registrationComplete = false;
+  bool _otpSent = true;
+  bool _welcomeEmailSent = true;
 
   final List<String> _bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
@@ -83,9 +85,21 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
       });
       setState(() {
         _tempPassword = response['temp_password'] ?? response['temporary_password'];
+        _otpSent = response['otp_sent'] != false;
+        _welcomeEmailSent = response['welcome_email_sent'] != false;
         _registrationComplete = true;
       });
-      if (mounted) showSuccessSnackBar(context, AppLocalizations.tr('account_created'));
+      if (mounted) {
+        showSuccessSnackBar(context, AppLocalizations.tr('account_created'));
+        if (_otpSent) {
+          showSuccessSnackBar(context, AppLocalizations.tr('otp_sent_to_patient'));
+        } else {
+          showErrorSnackBar(context, AppLocalizations.tr('otp_send_failed'));
+        }
+        if (!_welcomeEmailSent) {
+          showErrorSnackBar(context, AppLocalizations.tr('welcome_email_failed'));
+        }
+      }
     } catch (e) {
       if (mounted) showErrorSnackBar(context, e);
     }
@@ -106,7 +120,9 @@ class _AdminCreatePatientScreenState extends State<AdminCreatePatientScreen> {
               if (_registrationComplete && _tempPassword != null)
                 TempPasswordCard(
                   tempPassword: _tempPassword!,
-                  subtitle: AppLocalizations.tr('login_blocked_until_verified'),
+                  subtitle: '${AppLocalizations.tr('login_blocked_until_verified')}\n\n'
+                      '${_otpSent ? AppLocalizations.tr('otp_sent_to_patient') : AppLocalizations.tr('otp_send_failed')}\n\n'
+                      '${AppLocalizations.tr('patient_must_verify_email')}',
                 ),
               if (!_registrationComplete) ...[
                 CustomTextField(controller: _firstNameController, label: AppLocalizations.tr('first_name'), prefixIcon: Icons.person, validator: (v) => v == null || v.isEmpty ? AppLocalizations.tr('field_required') : null),

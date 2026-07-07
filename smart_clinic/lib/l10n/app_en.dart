@@ -296,6 +296,7 @@ class AppStringsEn {
     'format_csv': 'CSV (Excel charts & analysis)',
     'format_xlsx': 'XLSX (formatted Excel workbook)',
     'otp_sent_to_patient': 'A verification code was sent to the patient email.',
+    'otp_send_failed': 'Verification email could not be sent. The patient can request a new code at login.',
     'patient_must_verify_email': 'The patient must verify their email and set a new password before accessing their account.',
     'no_slots_available': 'No available slots on this day. Please select a different date ({days}).',
     'clinic_closed_day': 'The clinic is closed on this day.',
