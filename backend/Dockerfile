@@ -14,4 +14,6 @@ RUN pip install -r requirements.txt
 # App code + Flutter web bundle (served by FastAPI).
 COPY . .
 
-CMD gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-8080} --timeout 120
+RUN chmod +x start.sh
+
+CMD ["./start.sh"]
