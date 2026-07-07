@@ -1246,9 +1246,10 @@ async def transcribe_voice(
               (result.get("transcript") or "")[:100], result.get("language"), result.get("model"))
 
     if not result.get("transcript"):
+        _log.warning("[Voice] Empty transcript for %d bytes audio, suffix=%s, lang=%s", len(audio_bytes), suffix, lang)
         raise HTTPException(
             status_code=422,
-            detail="Could not detect speech. Speak clearly for 2–3 seconds in Arabic or English, then tap stop.",
+            detail=f"Could not detect speech ({len(audio_bytes)} bytes, {suffix}). Speak clearly and loudly for 2–3 seconds, then tap stop.",
         )
 
     return VoiceTranscribeResponse(**result)

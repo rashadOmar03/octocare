@@ -4,6 +4,17 @@ import 'dart:typed_data';
 
 import 'package:web/web.dart';
 
+@JS('console.log')
+external void _consoleLog(JSString msg);
+@JS('console.warn')
+external void _consoleWarn(JSString msg);
+@JS('console.error')
+external void _consoleError(JSString msg);
+
+void _jsLog(String msg) => _consoleLog(msg.toJS);
+void _jsWarn(String msg) => _consoleWarn(msg.toJS);
+void _jsError(String msg) => _consoleError(msg.toJS);
+
 /// Web voice capture via browser MediaRecorder (no Flutter `record` plugin).
 class VoicePlatform {
   MediaStream? _stream;
@@ -112,47 +123,67 @@ class VoicePlatform {
       final data = event.data;
       if (data.size > 0) {
         _chunks.add(data);
+        _jsLog('[Voice] chunk #${_chunks.length} size=${data.size}');
       }
+    }).toJS;
+
+    _recorder!.onerror = ((Event _) {
+      _jsError('[Voice] MediaRecorder error');
     }).toJS;
 
     // Timeslice ensures Chrome/Edge/Firefox emit audio chunks reliably on laptops.
     _recorder!.start(250);
     isRecording = true;
+    _jsLog('[Voice] Recording started mime=$_mimeType');
   }
 
   Future<Uint8List> stopRecordingBytes() async {
     final recorder = _recorder;
     if (recorder == null || !isRecording) {
+      _jsWarn('[Voice] stopRecordingBytes: not recording');
       return Uint8List(0);
     }
 
     isRecording = false;
     final resultCompleter = Completer<Uint8List>();
     final mimeType = _mimeType;
-    final chunks = _chunks;
+
+    // Snapshot chunks so far; onstop may fire synchronously.
+    final chunksCopy = List<Blob>.from(_chunks);
 
     recorder.onstop = ((Event _) {
-      Timer(const Duration(milliseconds: 300), () async {
+      // Merge any new chunks that arrived between requestData and stop.
+      final allChunks = <Blob>[...chunksCopy];
+      for (final c in _chunks) {
+        if (!allChunks.contains(c)) allChunks.add(c);
+      }
+      _chunks.clear();
+
+      _jsLog('[Voice] onstop fired, ${allChunks.length} chunks');
+
+      Future<void>.delayed(const Duration(milliseconds: 150)).then((_) async {
         try {
           Uint8List bytes = Uint8List(0);
-          if (chunks.isNotEmpty) {
+          if (allChunks.isNotEmpty) {
             final blob = Blob(
-              chunks.map((b) => b as BlobPart).toList().toJS,
+              allChunks.map((b) => b as BlobPart).toList().toJS,
               BlobPropertyBag(type: mimeType),
             );
+            _jsLog('[Voice] blob size=${blob.size} type=${blob.type}');
             if (blob.size >= 32) {
               bytes = await _blobToBytes(blob);
             }
           }
+          _jsLog('[Voice] final bytes=${bytes.length}');
           if (!resultCompleter.isCompleted) {
             resultCompleter.complete(bytes);
           }
-        } catch (_) {
+        } catch (e) {
+          _jsError('[Voice] onstop error: $e');
           if (!resultCompleter.isCompleted) {
             resultCompleter.complete(Uint8List(0));
           }
         } finally {
-          chunks.clear();
           _finalizeRecording();
         }
       });
@@ -160,16 +191,18 @@ class VoicePlatform {
 
     try {
       recorder.requestData();
-      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       recorder.stop();
-    } catch (_) {
+    } catch (e) {
+      _jsError('[Voice] stop error: $e');
       _finalizeRecording();
       return Uint8List(0);
     }
 
     try {
       return await resultCompleter.future.timeout(const Duration(seconds: 12));
-    } catch (_) {
+    } catch (e) {
+      _jsError('[Voice] timeout: $e');
       _finalizeRecording();
       return Uint8List(0);
     }

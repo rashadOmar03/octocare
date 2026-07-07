@@ -117,7 +117,14 @@ class VoiceService {
     final bytes = await _platform.stopRecordingBytes();
     if (bytes.isEmpty) {
       throw Exception(
-        'No audio captured. Tap mic (red stop icon), speak clearly for 2–3 seconds, tap stop. Allow microphone access.',
+        'No audio captured (0 bytes). Make sure your microphone is not muted. '
+        'Tap mic, speak clearly for 2–3 seconds, then tap stop.',
+      );
+    }
+    if (bytes.length < 400) {
+      throw Exception(
+        'Recording too short (${bytes.length} bytes). '
+        'Hold the mic and speak for at least 2 seconds.',
       );
     }
 
@@ -135,7 +142,8 @@ class VoiceService {
     final transcript = (response['transcript'] ?? '').toString().trim();
     if (transcript.isEmpty) {
       throw Exception(
-        'Could not detect speech. Speak clearly in Arabic or English for 2–3 seconds, then tap stop.',
+        'Could not detect speech (${bytes.length} bytes sent). '
+        'Speak clearly and loudly for 2–3 seconds, then tap stop.',
       );
     }
 
