@@ -1,6 +1,42 @@
 import 'dart:convert';
 
-import 'api_service.dart';import 'voice_platform.dart';
+import 'api_service.dart';
+import 'voice_platform.dart';
+
+const _whisperHallucinations = {
+  'you',
+  'you.',
+  'thank you',
+  'thank you.',
+  'thanks',
+  'thanks.',
+  'thanks for watching',
+  'thank you for watching',
+  'subscribe',
+  'bye',
+  'bye bye',
+  'the end',
+  '...',
+  'mm',
+  'hmm',
+  'uh',
+  'um',
+  'okay',
+  'ok',
+  'شكرا',
+  'شكراً',
+  'مرحبا',
+  'مرحباً',
+};
+
+bool _isLowQualityTranscript(String transcript, int audioBytes) {
+  final cleaned = transcript.trim().toLowerCase().replaceAll(RegExp(r'[.,!?]+$'), '');
+  if (cleaned.isEmpty) return true;
+  if (_whisperHallucinations.contains(cleaned) && audioBytes < 16000) return true;
+  if (cleaned.length <= 4 && audioBytes < 10000) return true;
+  if (cleaned.split(RegExp(r'\s+')).length <= 1 && audioBytes < 6000) return true;
+  return false;
+}
 
 class VoiceService {
   VoiceService._();
@@ -32,9 +68,9 @@ class VoiceService {
     final startedAt = _recordingStartedAt;
     _recordingStartedAt = null;
     if (startedAt != null &&
-        DateTime.now().difference(startedAt).inMilliseconds < 900) {
+        DateTime.now().difference(startedAt).inMilliseconds < 2000) {
       await _platform.cancelRecording();
-      throw Exception('Hold the mic a little longer while you speak, then tap stop.');
+      throw Exception('Hold the mic for at least 2 seconds while you speak, then tap stop.');
     }
 
     final bytes = await _platform.stopRecordingBytes();
@@ -55,8 +91,10 @@ class VoiceService {
     );
 
     final transcript = (response['transcript'] ?? '').toString().trim();
-    if (transcript.isEmpty) {
-      throw Exception('Could not detect speech. Please try again or type your message.');
+    if (transcript.isEmpty || _isLowQualityTranscript(transcript, bytes.length)) {
+      throw Exception(
+        'Could not detect clear speech. Speak for 2–3 seconds in a quiet place, then tap stop.',
+      );
     }
     return transcript;
   }

@@ -57,8 +57,8 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(AppLocalizations.tr('voice_listening')),
-            duration: const Duration(seconds: 2),
+            content: Text(AppLocalizations.tr('voice_hold_longer')),
+            duration: const Duration(seconds: 4),
           ),
         );
       }

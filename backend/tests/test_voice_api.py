@@ -217,6 +217,15 @@ def test_transcribe_empty_speech_returns_422(mock_transcribe, auth_as):
     assert response.status_code == 422
 
 
+def test_whisper_hallucination_you_on_short_audio():
+    from voice_service import _is_low_quality_transcript
+
+    assert _is_low_quality_transcript("you", 2000) is True
+    assert _is_low_quality_transcript("thank you", 3000) is True
+    assert _is_low_quality_transcript("I have chest pain", 2000) is False
+    assert _is_low_quality_transcript("you", 20000) is False
+
+
 @patch("routers.ai_router._call_model")
 def test_chat_after_voice_message(mock_call, auth_as):
     auth_as("patient")

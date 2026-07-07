@@ -500,6 +500,7 @@ class AppStringsAr {
     'voice_listen': 'استمع',
     'voice_transcribing': 'جاري تحويل الصوت…',
     'voice_sending': 'جاري إرسال الرسالة…',
+    'voice_hold_longer': 'استمر بالتحدث… اضغط إيقاف عند الانتهاء (ثانيتان على الأقل)',
     'leave_review': 'اترك تقييماً',
     'submit_review': 'إرسال التقييم',
     'review_submitted': 'شكراً! تم حفظ تقييمك.',

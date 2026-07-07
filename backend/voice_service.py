@@ -25,6 +25,41 @@ VOICE_MAP = {
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "") or os.getenv("LM_API_KEY", "")
 GROQ_WHISPER_MODEL = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3")
 
+# Whisper often hallucinates these on silence, short clips, or noisy laptop mics.
+_WHISPER_HALLUCINATIONS = frozenset({
+    "you", "you.", "thank you", "thank you.", "thanks", "thanks.",
+    "thanks for watching", "thank you for watching",
+    "subscribe", "bye", "bye bye", "the end",
+    "...", "mm", "hmm", "uh", "um", "okay", "ok",
+    "شكرا", "شكراً", "مرحبا", "مرحباً",
+})
+
+
+def _mime_for_suffix(suffix: str) -> str:
+    ext = suffix.lower().lstrip(".")
+    if ext in ("mp4", "m4a"):
+        return "audio/mp4"
+    if ext == "ogg":
+        return "audio/ogg"
+    if ext == "wav":
+        return "audio/wav"
+    return "audio/webm"
+
+
+def _is_low_quality_transcript(transcript: str, audio_bytes: bytes | int) -> bool:
+    """True when Whisper likely hallucinated on silence or a very short clip."""
+    cleaned = (transcript or "").strip().lower().rstrip(".,!?")
+    if not cleaned:
+        return True
+    size = audio_bytes if isinstance(audio_bytes, int) else len(audio_bytes)
+    if cleaned in _WHISPER_HALLUCINATIONS and size < 16000:
+        return True
+    if len(cleaned) <= 4 and size < 10000:
+        return True
+    if len(cleaned.split()) <= 1 and size < 6000:
+        return True
+    return False
+
 
 def _normalize_language(code: str | None, fallback: str = "en") -> str:
     """Map Whisper/Groq language codes to ar or en."""
@@ -66,9 +101,15 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
         tmp_path = tmp.name
 
     try:
+        mime = _mime_for_suffix(suffix)
         with open(tmp_path, "rb") as f:
-            files = {"file": (f"audio{suffix}", f, "audio/webm")}
-            data: dict = {"model": GROQ_WHISPER_MODEL, "response_format": "json"}
+            files = {"file": (f"audio{suffix}", f, mime)}
+            data: dict = {
+                "model": GROQ_WHISPER_MODEL,
+                "response_format": "json",
+                "temperature": "0",
+                "prompt": "Medical clinic conversation. Patient or staff speaking English or Arabic.",
+            }
             # Omit language so Whisper auto-detects Arabic vs English from speech.
             # Forcing UI locale caused Arabic speech to be transcribed in English.
             if language in ("ar", "en"):
@@ -86,6 +127,8 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
 
         transcript = (body.get("text") or "").strip()
         detected = _normalize_language(body.get("language"), fallback=language or "en")
+        if _is_low_quality_transcript(transcript, audio_bytes):
+            transcript = ""
         return {
             "transcript": transcript,
             "language": detected,
@@ -153,6 +196,10 @@ def transcribe_file(
     if not transcript:
         transcript, info = _run(vad_filter=False)
     detected = _normalize_language(getattr(info, "language", None), fallback=lang or "en")
+    with open(file_path, "rb") as f:
+        raw = f.read()
+    if _is_low_quality_transcript(transcript, raw):
+        transcript = ""
     return {
         "transcript": transcript,
         "language": detected,

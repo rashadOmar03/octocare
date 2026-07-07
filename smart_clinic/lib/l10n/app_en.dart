@@ -500,6 +500,7 @@ class AppStringsEn {
     'voice_listen': 'Listen',
     'voice_transcribing': 'Transcribing…',
     'voice_sending': 'Sending message…',
+    'voice_hold_longer': 'Keep speaking… tap stop when finished (at least 2 seconds)',
     'leave_review': 'Leave review',
     'submit_review': 'Submit review',
     'review_submitted': 'Thank you! Your review was saved.',
