@@ -1246,10 +1246,20 @@ async def transcribe_voice(
               (result.get("transcript") or "")[:100], result.get("language"), result.get("model"))
 
     if not result.get("transcript"):
-        _log.warning("[Voice] Empty transcript for %d bytes audio, suffix=%s, lang=%s", len(audio_bytes), suffix, lang)
+        raw = result.get("_raw", "")
+        rejected = result.get("_rejected", "")
+        _log.warning(
+            "[Voice] Empty transcript for %d bytes audio, suffix=%s, lang=%s, raw=%r, rejected=%s",
+            len(audio_bytes), suffix, lang, raw[:80], rejected,
+        )
+        hint = f"({len(audio_bytes)} bytes, {suffix})"
+        if raw and rejected:
+            hint += f" [Whisper heard: '{raw[:60]}' — filtered as {rejected}]"
+        elif not raw:
+            hint += " [Whisper returned empty — mic may be muted or too quiet]"
         raise HTTPException(
             status_code=422,
-            detail=f"Could not detect speech ({len(audio_bytes)} bytes, {suffix}). Speak clearly and loudly for 2–3 seconds, then tap stop.",
+            detail=f"Could not detect speech {hint}. Speak clearly and loudly for 2–3 seconds, then tap stop.",
         )
 
     return VoiceTranscribeResponse(**result)

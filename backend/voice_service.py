@@ -336,16 +336,21 @@ def _transcribe_groq(audio_bytes: bytes, suffix: str = ".webm", language: str | 
                 return {"transcript": "", "language": lang or language or "en", "error": resp.text[:300]}
 
             body = resp.json()
-            transcript = (body.get("text") or "").strip()
+            raw_transcript = (body.get("text") or "").strip()
+            transcript = raw_transcript
             detected = _normalize_language(body.get("language"), fallback=lang or language or "en")
             _log_whisper_segments(body, audio_size=len(audio_bytes), language=language)
+            rejected_reason = ""
             if _is_garbage_transcript(transcript, requested_lang=language, audio_bytes=audio_bytes):
+                rejected_reason = "garbage_filter"
                 logger.info("[Voice] Rejected as garbage: %r", transcript[:80])
                 transcript = ""
             return {
                 "transcript": transcript,
                 "language": detected,
                 "model": f"groq-{GROQ_WHISPER_MODEL}",
+                "_raw": raw_transcript,
+                "_rejected": rejected_reason,
             }
         finally:
             try:
