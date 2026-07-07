@@ -320,9 +320,12 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
           _isConnecting = false;
           _isConnected = false;
         });
+        final message = e is ApiException && e.message.isNotEmpty
+            ? e.message
+            : AppLocalizations.tr('sensor_connect_failed');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(message),
             backgroundColor: Theme.of(context).colorScheme.error,
             duration: const Duration(seconds: 8),
           ),

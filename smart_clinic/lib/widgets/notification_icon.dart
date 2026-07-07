@@ -27,7 +27,7 @@ class NotificationIconState extends State<NotificationIcon> {
       final count = data.where((n) => n['is_read'] != true).length;
       if (mounted) setState(() => _unreadCount = count);
     } catch (_) {
-      if (mounted) setState(() => _unreadCount = 0);
+      // Keep the last badge count if refresh fails.
     }
   }
 

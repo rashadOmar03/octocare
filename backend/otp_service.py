@@ -6,7 +6,7 @@ from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
 from auth import hash_password, verify_password
-from email_service import email_provider_status, send_otp_email, send_otp_email_async
+from email_service import send_otp_email
 from models import EmailOTP
 
 
@@ -15,14 +15,9 @@ def _generate_code() -> str:
 
 
 def _deliver_otp_email(db: Session, email: str, code: str, purpose: str) -> bool:
-    """Send OTP email. HTTP providers send synchronously (reliable on Railway)."""
-    status = email_provider_status()
+    """Send OTP email synchronously so callers know if delivery failed."""
     try:
-        if status["provider"] in ("brevo", "resend"):
-            send_otp_email(db, email, code, purpose)
-        else:
-            send_otp_email_async(email, code, purpose)
-        return True
+        return send_otp_email(db, email, code, purpose)
     except Exception as exc:
         print(
             f"[Octocare Clinic OTP] Email delivery failed for {email}: {exc}",

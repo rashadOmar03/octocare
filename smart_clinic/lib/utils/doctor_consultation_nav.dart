@@ -21,6 +21,23 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
     }
   }
 
+  bool isReadyForConsultation(Appointment apt) =>
+      apt.isConsultationEditable || (apt.status == 'arrived' && apt.isPaid);
+
+  String consultationErrorMessage(Object error) {
+    final text = error.toString().toLowerCase();
+    if (text.contains('payment')) {
+      return AppLocalizations.tr('payment_required_consultation');
+    }
+    if (text.contains('arrived') || text.contains('queue')) {
+      return AppLocalizations.tr('arrived_required_consultation');
+    }
+    if (error is ApiException && error.message.isNotEmpty) {
+      return error.message;
+    }
+    return AppLocalizations.tr('consultation_not_available');
+  }
+
   if (appointment.status == 'completed' || appointment.isConsultationEditOnly) {
     final apt = await freshAppointment(appointment);
     if (!apt.hasConsultation && apt.medicalRecordId == null) {
@@ -35,17 +52,22 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
   if (appointment.canDoctorStartConsultation) {
     try {
       var apt = await freshAppointment(appointment);
-      if (!apt.isConsultationEditable && apt.id != null) {
-        apt = await appointmentService.startConsultation(apt.id!);
+      if (!isReadyForConsultation(apt) && apt.id != null) {
+        try {
+          apt = await appointmentService.startConsultation(apt.id!);
+        } catch (_) {
+          if (isReadyForConsultation(appointment)) {
+            apt = appointment;
+          } else if (!isReadyForConsultation(apt)) {
+            rethrow;
+          }
+        }
       }
       if (!context.mounted) return false;
       return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
     } catch (e) {
       if (context.mounted) {
-        final message = e.toString().contains('payment')
-            ? AppLocalizations.tr('payment_required_consultation')
-            : AppLocalizations.tr('consultation_not_available');
-        showErrorSnackBar(context, message);
+        showErrorSnackBar(context, consultationErrorMessage(e));
       }
       return false;
     }
@@ -55,7 +77,7 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
     showErrorSnackBar(context, AppLocalizations.tr('payment_required_consultation'));
     return false;
   }
-  if (appointment.status == 'confirmed' || appointment.status == 'pending') {
+  if ((appointment.status == 'confirmed' || appointment.status == 'pending') && !appointment.isPaid) {
     showErrorSnackBar(context, AppLocalizations.tr('payment_required_consultation'));
     return false;
   }

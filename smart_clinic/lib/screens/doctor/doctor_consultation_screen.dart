@@ -65,6 +65,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
   bool get _isEditOnly =>
       _appointment?.status == 'completed' || (_recordLoaded && _recordId != null && _appointment == null);
   bool get _hasSavedRecord => _recordId != null || _recordLoaded || _appointment?.medicalRecordId != null;
+  bool get _canMarkCompleted => _hasSavedRecord && !_isEditOnly && !_isStandalone;
   bool get _isStandalone => _appointment == null && _standalonePatient != null;
   Map<String, dynamic>? _standalonePatient;
   bool _needsListRefresh = false;
@@ -685,6 +686,10 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
   }
 
   Future<void> _markCompletedOnly() async {
+    if (!_canMarkCompleted) {
+      showErrorSnackBar(context, AppLocalizations.tr('complete_requires_save_first'));
+      return;
+    }
     if (_recordId == null && _appointment?.medicalRecordId == null) {
       await _loadExistingRecord();
     }
@@ -844,6 +849,18 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
             if (_isEditOnly) const SizedBox(height: 12),
             if (_appointment?.patientId != null || _standalonePatient != null) ...[
               const SizedBox(height: 12),
+              if (!_isEditOnly && !_isStandalone && !_canMarkCompleted)
+                Card(
+                  color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.35),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      AppLocalizations.tr('complete_requires_save_first'),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ),
+              if (!_isEditOnly && !_isStandalone && !_canMarkCompleted) const SizedBox(height: 12),
               Row(
                 children: [
                   if (_appointment?.patientId != null)
@@ -858,7 +875,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _isLoading ? null : _markCompletedOnly,
+                        onPressed: _isLoading || !_canMarkCompleted ? null : _markCompletedOnly,
                         icon: const Icon(Icons.done_all),
                         label: Text(AppLocalizations.tr('mark_completed')),
                       ),

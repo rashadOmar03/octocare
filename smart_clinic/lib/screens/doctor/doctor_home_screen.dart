@@ -46,12 +46,15 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
       final arrivedQueue = await _appointmentService.getDoctorQueue(date: todayStr);
       const activeStatuses = {'pending', 'confirmed', 'arrived'};
       final fromToday = all.where((a) => activeStatuses.contains(a.status));
-      final merged = <String, Appointment>{
-        for (final a in fromToday)
-          if (a.id != null) a.id!: a,
-        for (final a in arrivedQueue)
-          if (a.id != null) a.id!: a,
-      };
+      final merged = <String, Appointment>{};
+      for (final a in fromToday) {
+        if (a.id != null) merged[a.id!] = a;
+      }
+      for (final a in arrivedQueue) {
+        if (a.id == null) continue;
+        final existing = merged[a.id!];
+        merged[a.id!] = existing == null ? a : _mergeAppointment(existing, a);
+      }
       _todayAppointments = merged.values.toList()
         ..sort((a, b) {
           final aArrived = a.status == 'arrived';
@@ -88,6 +91,29 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     setState(() => _isLoading = false);
   }
 
+  Appointment _mergeAppointment(Appointment primary, Appointment secondary) {
+    return Appointment(
+      id: primary.id ?? secondary.id,
+      patientId: primary.patientId ?? secondary.patientId,
+      doctorId: primary.doctorId ?? secondary.doctorId,
+      patientName: primary.patientName ?? secondary.patientName,
+      doctorName: primary.doctorName ?? secondary.doctorName,
+      specialtyName: primary.specialtyName ?? secondary.specialtyName,
+      date: primary.date ?? secondary.date,
+      timeSlot: primary.timeSlot ?? secondary.timeSlot,
+      status: secondary.status ?? primary.status,
+      notes: primary.notes ?? secondary.notes,
+      queueNumber: secondary.queueNumber ?? primary.queueNumber,
+      createdAt: primary.createdAt ?? secondary.createdAt,
+      isPaid: primary.isPaid || secondary.isPaid,
+      paymentStatus: primary.paymentStatus ?? secondary.paymentStatus,
+      needsPayment: primary.needsPayment || secondary.needsPayment,
+      medicalRecordId: primary.medicalRecordId ?? secondary.medicalRecordId,
+      hasConsultation: primary.hasConsultation || secondary.hasConsultation,
+      patientPhotoUrl: primary.patientPhotoUrl ?? secondary.patientPhotoUrl,
+    );
+  }
+
   String _consultationStatusSubtitle(Appointment a) {
     if (!a.isPaid && (a.status == 'arrived' || a.status == 'confirmed' || a.status == 'pending')) {
       return AppLocalizations.tr('payment_required_consultation');
@@ -95,34 +121,94 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
     return AppLocalizations.tr(a.status ?? '');
   }
 
-  Widget _consultationTrailing(Appointment a) {
-    if (a.canDoctorStartConsultation) {
-      return ElevatedButton(
-        onPressed: () async {
-          final changed = await openDoctorConsultation(context, a);
-          if (changed == true && mounted) _loadData();
-        },
-        child: Text(AppLocalizations.tr('start_consultation')),
-      );
-    }
-    if (a.isConsultationEditOnly) {
-      return OutlinedButton(
-        onPressed: () async {
-          final changed = await openDoctorConsultation(context, a);
-          if (changed == true && mounted) _loadData();
-        },
-        child: Text(AppLocalizations.tr('edit_consultation')),
-      );
-    }
-    return SizedBox(
-      width: 130,
-      child: Text(
-        _consultationStatusSubtitle(a),
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
-            ),
-        textAlign: TextAlign.end,
-        maxLines: 3,
+  Widget _todayAppointmentCard(Appointment a) {
+    final canOpen = a.canDoctorStartConsultation || a.isConsultationEditOnly;
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: canOpen
+            ? () async {
+                final changed = await openDoctorConsultation(context, a);
+                if (changed == true && mounted) _loadData();
+              }
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: a.status == 'arrived'
+                        ? const Color(0xFF7B1FA2).withValues(alpha: 0.15)
+                        : null,
+                    child: Text(
+                      a.status == 'arrived' && a.queueNumber != null
+                          ? '${a.queueNumber}'
+                          : (a.patientName?.isNotEmpty == true ? a.patientName![0] : '?'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          a.patientName ?? '',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          a.status == 'arrived'
+                              ? '${AppLocalizations.tr('waiting_queue')} • ${TimeFormat.format24To12(a.timeSlot)}'
+                              : TimeFormat.format24To12(a.timeSlot),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (a.canDoctorStartConsultation) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final changed = await openDoctorConsultation(context, a);
+                      if (changed == true && mounted) _loadData();
+                    },
+                    child: Text(AppLocalizations.tr('start_consultation')),
+                  ),
+                ),
+              ] else if (a.isConsultationEditOnly) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      final changed = await openDoctorConsultation(context, a);
+                      if (changed == true && mounted) _loadData();
+                    },
+                    child: Text(AppLocalizations.tr('edit_consultation')),
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 8),
+                Text(
+                  _consultationStatusSubtitle(a),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
+                      ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -263,33 +349,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       ),
                     )
                   else
-                    ..._todayAppointments.take(5).map((a) => Card(
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: a.status == 'arrived'
-                                  ? const Color(0xFF7B1FA2).withValues(alpha: 0.15)
-                                  : null,
-                              child: Text(
-                                a.status == 'arrived' && a.queueNumber != null
-                                    ? '${a.queueNumber}'
-                                    : (a.patientName?.isNotEmpty == true ? a.patientName![0] : '?'),
-                              ),
-                            ),
-                            title: Text(a.patientName ?? ''),
-                            subtitle: Text(
-                              a.status == 'arrived'
-                                  ? '${AppLocalizations.tr('waiting_queue')} • ${TimeFormat.format24To12(a.timeSlot)}'
-                                  : TimeFormat.format24To12(a.timeSlot),
-                            ),
-                            trailing: _consultationTrailing(a),
-                            onTap: (a.canDoctorStartConsultation || a.isConsultationEditOnly)
-                                ? () async {
-                                    final changed = await openDoctorConsultation(context, a);
-                                    if (changed == true && mounted) _loadData();
-                                  }
-                                : null,
-                          ),
-                        )),
+                    ..._todayAppointments.take(5).map(_todayAppointmentCard),
                 ],
               ),
       ),

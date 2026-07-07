@@ -4,6 +4,7 @@ import '../../services/api_service.dart';
 import '../../models/notification_model.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_widget.dart';
+import '../../utils/ui_helpers.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -34,7 +35,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _notifications = data.map((e) => NotificationModel.fromJson(Map<String, dynamic>.from(e))).toList();
     } catch (e) {
       _notifications = [];
-      _loadError = e.toString();
+      _loadError = e is ApiException ? e.message : e.toString();
     }
     setState(() => _isLoading = false);
   }
@@ -42,8 +43,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _markAsRead(String id) async {
     try {
       await ApiService.instance.put('/patients/notifications/$id/read', {});
-      _loadNotifications();
-    } catch (_) {}
+      await _loadNotifications();
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(context, AppLocalizations.tr('notification_action_failed'));
+      }
+    }
   }
 
   Future<void> _markAllRead() async {
@@ -55,8 +60,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _deleteNotification(String id) async {
     try {
       await ApiService.instance.delete('/patients/notifications/$id');
-      _loadNotifications();
-    } catch (_) {}
+      await _loadNotifications();
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(context, AppLocalizations.tr('notification_action_failed'));
+      }
+    }
   }
 
   @override
@@ -79,13 +88,34 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ? const LoadingWidget()
           : _loadError != null
               ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.notifications_off, size: 64, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
-                      const SizedBox(height: 16),
-                      Text(AppLocalizations.tr('no_notifications')),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error.withValues(alpha: 0.7)),
+                        const SizedBox(height: 16),
+                        Text(
+                          AppLocalizations.tr('load_failed'),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _loadError!,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65),
+                              ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _loadNotifications,
+                          icon: const Icon(Icons.refresh),
+                          label: Text(AppLocalizations.tr('retry')),
+                        ),
+                      ],
+                    ),
                   ),
                 )
               : _notifications.isEmpty
