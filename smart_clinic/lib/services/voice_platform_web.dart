@@ -5,8 +5,6 @@ import 'dart:typed_data';
 import 'package:web/web.dart';
 
 /// Web voice capture via browser MediaRecorder (no Flutter `record` plugin).
-/// The `record` package causes MissingPluginException on web when served from
-/// backend/web because record_web is not always registered in that bundle.
 class VoicePlatform {
   MediaStream? _stream;
   MediaRecorder? _recorder;
@@ -15,7 +13,14 @@ class VoicePlatform {
   bool isRecording = false;
   String recordingFilename = 'voice.webm';
   String _mimeType = 'audio/webm';
-  Completer<void>? _stopCompleter;
+  bool _useTimeslice = false;
+
+  bool get _isAppleBrowser {
+    final ua = window.navigator.userAgent.toLowerCase();
+    final isApple = ua.contains('iphone') || ua.contains('ipad') || ua.contains('ipod');
+    final isSafari = ua.contains('safari') && !ua.contains('chrome') && !ua.contains('chromium');
+    return isApple || (ua.contains('macintosh') && isSafari);
+  }
 
   Future<MediaStream> _getMicStream() async {
     final mediaDevices = window.navigator.mediaDevices;
@@ -26,6 +31,7 @@ class VoicePlatform {
           'noiseSuppression': true,
           'autoGainControl': true,
           'channelCount': 1,
+          'sampleRate': 48000,
         }.jsify() as JSObject,
       );
       return await mediaDevices.getUserMedia(constraints).toDart;
@@ -36,26 +42,29 @@ class VoicePlatform {
     }
   }
 
-  Future<bool> ensureMicPermission() async {
-    try {
-      final stream = await _getMicStream();
-      for (final track in stream.getTracks().toDart) {
-        track.stop();
-      }
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
+  /// Avoid opening the mic here — a second getUserMedia in startRecording caused empty audio on laptops.
+  Future<bool> ensureMicPermission() async => true;
 
-  String? _pickMimeType() {
-    const candidates = [
+  List<String> _mimeCandidates() {
+    if (_isAppleBrowser) {
+      return const [
+        'audio/mp4',
+        'audio/aac',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+      ];
+    }
+    return const [
       'audio/webm;codecs=opus',
       'audio/webm',
       'audio/ogg;codecs=opus',
       'audio/mp4',
     ];
-    for (final mime in candidates) {
+  }
+
+  String? _pickMimeType() {
+    for (final mime in _mimeCandidates()) {
       if (MediaRecorder.isTypeSupported(mime)) {
         return mime;
       }
@@ -64,7 +73,7 @@ class VoicePlatform {
   }
 
   String _filenameForMime(String mime) {
-    if (mime.contains('mp4')) return 'voice.mp4';
+    if (mime.contains('mp4') || mime.contains('aac')) return 'voice.m4a';
     if (mime.contains('ogg')) return 'voice.ogg';
     return 'voice.webm';
   }
@@ -72,7 +81,20 @@ class VoicePlatform {
   Future<void> startRecording() async {
     if (isRecording) return;
     _chunks.clear();
-    _stream = await _getMicStream();
+    _stopStreamTracks();
+
+    try {
+      _stream = await _getMicStream();
+    } catch (_) {
+      throw Exception(
+        'Microphone access denied or unavailable. Click the lock icon in the address bar, allow microphone, then refresh.',
+      );
+    }
+    final audioTracks = _stream!.getAudioTracks().toDart;
+    if (audioTracks.isEmpty) {
+      _stopStreamTracks();
+      throw Exception('No microphone track available.');
+    }
 
     final mime = _pickMimeType();
     _mimeType = mime ?? 'audio/webm';
@@ -89,47 +111,71 @@ class VoicePlatform {
       }
     }).toJS;
 
-    _recorder!.onstop = ((Event _) {
-      final completer = _stopCompleter;
-      if (completer != null && !completer.isCompleted) {
-        completer.complete();
-      }
-    }).toJS;
-
-    // Timeslice keeps Chrome/Edge emitting chunks during recording.
-    _recorder!.start(200);
+    // No timeslice: one reliable blob on stop (works better on Chrome/Edge laptops).
+    _useTimeslice = false;
+    try {
+      _recorder!.start();
+    } catch (_) {
+      _useTimeslice = true;
+      _recorder!.start(300);
+    }
     isRecording = true;
   }
 
   Future<Uint8List> stopRecordingBytes() async {
     final recorder = _recorder;
-    if (recorder == null) return Uint8List(0);
-
-    _stopCompleter = Completer<void>();
-    final state = recorder.state;
-    if (state == 'recording' || state == 'paused') {
-      try {
-        recorder.requestData();
-      } catch (_) {}
-      recorder.stop();
-      try {
-        await _stopCompleter!.future.timeout(const Duration(seconds: 8));
-      } catch (_) {}
+    if (recorder == null || !isRecording) {
+      return Uint8List(0);
     }
 
     isRecording = false;
-    _stopStreamTracks();
-    _recorder = null;
+    final resultCompleter = Completer<Uint8List>();
+    final mimeType = _mimeType;
+    final chunks = _chunks;
 
-    if (_chunks.isEmpty) return Uint8List(0);
+    recorder.onstop = ((Event _) {
+      Timer(const Duration(milliseconds: 250), () async {
+        try {
+          Uint8List bytes = Uint8List(0);
+          if (chunks.isNotEmpty) {
+            final blob = Blob(
+              chunks.map((b) => b as BlobPart).toList().toJS,
+              BlobPropertyBag(type: mimeType),
+            );
+            if (blob.size >= 32) {
+              bytes = await _blobToBytes(blob);
+            }
+          }
+          if (!resultCompleter.isCompleted) {
+            resultCompleter.complete(bytes);
+          }
+        } catch (_) {
+          if (!resultCompleter.isCompleted) {
+            resultCompleter.complete(Uint8List(0));
+          }
+        } finally {
+          chunks.clear();
+          _finalizeRecording();
+        }
+      });
+    }).toJS;
 
-    final blob = Blob(
-      _chunks.map((b) => b as BlobPart).toList().toJS,
-      BlobPropertyBag(type: _mimeType),
-    );
-    _chunks.clear();
-    if (blob.size < 100) return Uint8List(0);
-    return _blobToBytes(blob);
+    try {
+      if (_useTimeslice) {
+        recorder.requestData();
+      }
+      recorder.stop();
+    } catch (_) {
+      _finalizeRecording();
+      return Uint8List(0);
+    }
+
+    try {
+      return await resultCompleter.future.timeout(const Duration(seconds: 12));
+    } catch (_) {
+      _finalizeRecording();
+      return Uint8List(0);
+    }
   }
 
   Future<void> cancelRecording() async {
@@ -139,8 +185,12 @@ class VoicePlatform {
       } catch (_) {}
     }
     isRecording = false;
-    _stopStreamTracks();
     _chunks.clear();
+    _finalizeRecording();
+  }
+
+  void _finalizeRecording() {
+    _stopStreamTracks();
     _recorder = null;
   }
 
@@ -163,6 +213,9 @@ class VoicePlatform {
         return;
       }
       completer.complete((result as JSArrayBuffer).toDart.asUint8List());
+    }).toJS;
+    reader.onerror = ((Event _) {
+      completer.complete(Uint8List(0));
     }).toJS;
     reader.readAsArrayBuffer(blob);
     return completer.future;

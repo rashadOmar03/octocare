@@ -56,8 +56,11 @@ class VoiceService {
   Future<void> startRecording() async {
     if (_platform.isRecording) return;
     try {
-      if (!await ensureMicPermission()) {
-        throw Exception('Microphone permission is required for voice input.');
+      final permitted = await _platform.ensureMicPermission();
+      if (!permitted) {
+        throw Exception(
+          'Microphone access is blocked. Allow the microphone for this site in your browser settings, then refresh.',
+        );
       }
       await _platform.startRecording();
       _recordingStartedAt = DateTime.now();
@@ -76,7 +79,7 @@ class VoiceService {
     final startedAt = _recordingStartedAt;
     _recordingStartedAt = null;
     if (startedAt != null &&
-        DateTime.now().difference(startedAt).inMilliseconds < 1500) {
+        DateTime.now().difference(startedAt).inMilliseconds < 1200) {
       await _platform.cancelRecording();
       throw Exception('Hold the mic for at least 2 seconds while you speak, then tap stop.');
     }
@@ -84,7 +87,8 @@ class VoiceService {
     final bytes = await _platform.stopRecordingBytes();
     if (bytes.isEmpty) {
       throw Exception(
-        'No audio captured. Allow microphone access in your browser, check Windows mic settings, then try again.',
+        'No audio captured. Click the mic once to start (red stop icon), speak for 2–3 seconds, then tap stop. '
+        'Allow microphone access when the browser asks, and check your laptop or phone mic is not muted.',
       );
     }
 

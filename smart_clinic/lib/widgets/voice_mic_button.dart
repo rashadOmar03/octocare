@@ -73,6 +73,11 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
     return IconButton(
       tooltip: recording ? AppLocalizations.tr('voice_stop') : AppLocalizations.tr('voice_speak'),
       onPressed: _busy ? null : _toggle,
+      style: recording
+          ? IconButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error.withValues(alpha: 0.15),
+            )
+          : null,
       icon: _busy
           ? SizedBox(
               width: 20,
