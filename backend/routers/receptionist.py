@@ -26,6 +26,10 @@ from appointment_rules import (
     ensure_doctor_slot_free,
     count_paid_no_show_action_required,
     list_paid_no_show_action_required,
+    resolve_stale_appointment_states,
+    slot_duration_minutes,
+    NO_SHOW_STATUSES,
+    _visit_has_passed,
 )
 from routers.appointments import (
     _enrich_appointment,
@@ -40,7 +44,7 @@ from audit_service import log_audit
 from otp_service import create_and_send_otp
 from email_service import send_patient_welcome_email
 from profile_utils import profile_personal_info_complete
-from clinic_time import clinic_today, upcoming_from_date
+from clinic_time import clinic_today, clinic_now, upcoming_from_date
 from clinic_schedule import is_clinic_open
 
 router = APIRouter()
@@ -258,6 +262,7 @@ def receptionist_dashboard(
     db: Session = Depends(get_db),
 ):
     auto_cancel_expired_appointments(db)
+    resolve_stale_appointment_states(db)
     today = clinic_today()
     today_q = db.query(Appointment).filter(Appointment.date == today)
 
@@ -303,6 +308,7 @@ def action_required_appointments(
     db: Session = Depends(get_db),
 ):
     auto_cancel_expired_appointments(db)
+    resolve_stale_appointment_states(db)
     rows = list_paid_no_show_action_required(db)
     return [_enrich_appointment(a, db) for a in rows]
 
@@ -884,24 +890,39 @@ async def refund_payment(
         apt.notes = f"{apt.notes}\n[REFUNDED — collect payment again before visit]"
     elif apt:
         apt.notes = "[REFUNDED — collect payment again before visit]"
-    if apt and apt.status == "arrived":
-        apt.status = "confirmed"
-        apt.queue_number = None
-        _renumber_doctor_queue(db, apt.date, apt.doctor_id, notify_patients=True)
-        doctor = db.query(Doctor).filter(Doctor.id == apt.doctor_id).first()
-        if doctor:
-            doc_profile = db.query(Profile).filter(Profile.id == doctor.profile_id).first()
-            if doc_profile:
-                doc_user = db.query(User).filter(User.id == doc_profile.user_id).first()
-                if doc_user:
-                    p = db.query(Profile).filter(Profile.id == apt.patient_id).first()
-                    patient_name = f"{p.first_name or ''} {p.last_name or ''}".strip() if p else "Patient"
-                    db.add(Notification(
-                        id=str(uuid.uuid4()),
-                        user_id=doc_user.id,
-                        title="Patient Removed from Queue (Refund)",
-                        message=f"{patient_name} was removed from the queue after payment refund. Re-collect payment before arrival.",
-                    ))
+    if apt:
+        duration = slot_duration_minutes(db)
+        now = clinic_now().replace(tzinfo=None)
+        visit_passed = _visit_has_passed(apt, duration, now)
+        if visit_passed and apt.status in NO_SHOW_STATUSES:
+            apt.status = "cancelled"
+            apt.queue_number = None
+            log_audit(
+                db,
+                current_user.id,
+                "cancel_after_refund_no_show",
+                "appointment",
+                apt.id,
+                f"Cancelled missed paid visit on {apt.date} {apt.time_slot} after refund",
+            )
+        elif apt.status == "arrived":
+            apt.status = "confirmed"
+            apt.queue_number = None
+            _renumber_doctor_queue(db, apt.date, apt.doctor_id, notify_patients=True)
+            doctor = db.query(Doctor).filter(Doctor.id == apt.doctor_id).first()
+            if doctor:
+                doc_profile = db.query(Profile).filter(Profile.id == doctor.profile_id).first()
+                if doc_profile:
+                    doc_user = db.query(User).filter(User.id == doc_profile.user_id).first()
+                    if doc_user:
+                        p = db.query(Profile).filter(Profile.id == apt.patient_id).first()
+                        patient_name = f"{p.first_name or ''} {p.last_name or ''}".strip() if p else "Patient"
+                        db.add(Notification(
+                            id=str(uuid.uuid4()),
+                            user_id=doc_user.id,
+                            title="Patient Removed from Queue (Refund)",
+                            message=f"{patient_name} was removed from the queue after payment refund. Re-collect payment before arrival.",
+                        ))
     patient_name = "Patient"
     if apt:
         patient = db.query(Profile).filter(Profile.id == apt.patient_id).first()

@@ -188,49 +188,78 @@ def _paid_no_show_alert_sent(db: Session, appointment_id: str) -> bool:
     )
 
 
-def count_paid_no_show_action_required(db: Session) -> int:
-    """Paid confirmed/arrived visits past appointment date — receptionist must refund or reschedule."""
+def _visit_has_passed(apt: Appointment, duration_minutes: int, now: datetime) -> bool:
+    """True when the appointment slot end time is in the past."""
+    if apt.date > now.date():
+        return False
+    if apt.date < now.date():
+        return True
+    end = _appointment_start(apt.date, apt.time_slot) + timedelta(minutes=duration_minutes)
+    return end <= now
+
+
+def _paid_no_show_candidates(db: Session) -> list[Appointment]:
+    """Paid confirmed/arrived visits whose slot has ended — need refund or reschedule."""
     today = clinic_now().date()
-    paid_ids = {
-        row[0]
-        for row in db.query(Payment.appointment_id)
-        .filter(Payment.payment_status == "paid")
-        .all()
-    }
-    if not paid_ids:
-        return 0
-    return (
+    rows = (
         db.query(Appointment)
+        .join(Payment, Payment.appointment_id == Appointment.id)
         .filter(
-            Appointment.id.in_(paid_ids),
+            Payment.payment_status == "paid",
             Appointment.status.in_(NO_SHOW_STATUSES),
-            Appointment.date < today,
+            Appointment.date <= today,
         )
-        .count()
+        .all()
     )
+    duration = _get_duration(db)
+    now = clinic_now().replace(tzinfo=None)
+    return [apt for apt in rows if _visit_has_passed(apt, duration, now)]
+
+
+def resolve_stale_appointment_states(db: Session) -> int:
+    """Close out past visits that no longer need receptionist action."""
+    duration = _get_duration(db)
+    now = clinic_now().replace(tzinfo=None)
+    changed = 0
+
+    refunded_open = (
+        db.query(Appointment)
+        .join(Payment, Payment.appointment_id == Appointment.id)
+        .filter(
+            Payment.payment_status == "refunded",
+            Appointment.status.in_(NO_SHOW_STATUSES + ("pending",)),
+        )
+        .all()
+    )
+    for apt in refunded_open:
+        if not _visit_has_passed(apt, duration, now):
+            continue
+        apt.status = "cancelled"
+        apt.queue_number = None
+        log_audit(
+            db,
+            None,
+            "auto_cancel_refunded_no_show",
+            "appointment",
+            apt.id,
+            f"Closed refunded missed visit on {apt.date} {apt.time_slot}",
+        )
+        changed += 1
+
+    if changed:
+        db.commit()
+    return changed
+
+
+def count_paid_no_show_action_required(db: Session) -> int:
+    """Paid confirmed/arrived visits past appointment time — receptionist must refund or reschedule."""
+    return len(_paid_no_show_candidates(db))
 
 
 def list_paid_no_show_action_required(db: Session, limit: int = 50) -> list[Appointment]:
-    today = clinic_now().date()
-    paid_ids = {
-        row[0]
-        for row in db.query(Payment.appointment_id)
-        .filter(Payment.payment_status == "paid")
-        .all()
-    }
-    if not paid_ids:
-        return []
-    return (
-        db.query(Appointment)
-        .filter(
-            Appointment.id.in_(paid_ids),
-            Appointment.status.in_(NO_SHOW_STATUSES),
-            Appointment.date < today,
-        )
-        .order_by(Appointment.date.desc(), Appointment.time_slot.desc())
-        .limit(limit)
-        .all()
-    )
+    rows = _paid_no_show_candidates(db)
+    rows.sort(key=lambda a: (a.date, a.time_slot), reverse=True)
+    return rows[:limit]
 
 
 def auto_cancel_expired_appointments(db: Session) -> int:
@@ -278,11 +307,14 @@ def auto_cancel_expired_appointments(db: Session) -> int:
         db.query(Appointment)
         .filter(
             Appointment.status.in_(NO_SHOW_STATUSES),
-            Appointment.date < today,
+            Appointment.date <= today,
         )
         .all()
     )
+    duration = _get_duration(db)
     for apt in no_shows:
+        if not _visit_has_passed(apt, duration, now):
+            continue
         if _appointment_is_paid(db, apt.id):
             if not _paid_no_show_alert_sent(db, apt.id):
                 from routers.appointments import _get_patient_name, _notify_staff
