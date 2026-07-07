@@ -25,6 +25,7 @@ RULES:
 - Separate medications into prescription (new/current orders) vs plan (non-drug actions).
 - Plan must NOT contain medications — put all drugs in prescription array OR medications_current based on context.
 - Use null or [] for missing fields.
+- For each symptom, diagnosis, and medication include source_evidence: a short phrase copied or closely paraphrased from the source. If you cannot tie an item to the source, omit it.
 
 MEDICATION EXTRACTION (CRITICAL):
 - Understand medications from full context — NOT keyword matching. Works for Arabic, English, mixed, formal notes, dialogue, and messy text.

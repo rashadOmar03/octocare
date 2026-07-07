@@ -27,6 +27,7 @@ from schemas import (
 from auth import get_current_user, require_role
 from voice_service import transcribe_bytes, synthesize_speech_sync, whisper_is_available
 from extraction_review import run_extraction_review
+from transcript_preprocess import preprocess_transcript
 from medical_extraction import (
     EXTRACTION_SYSTEM_PROMPT,
     EXTRACTION_USER_PREFIX,
@@ -866,7 +867,7 @@ async def extract_medical_info(
     current_user: User = Depends(require_role("doctor", "admin")),
     db: Session = Depends(get_db),
 ):
-    transcript = data.actual_transcript
+    transcript = preprocess_transcript(data.actual_transcript)
     lang = detect_input_language(transcript)
     prefix = EXTRACTION_USER_PREFIX.get(lang, EXTRACTION_USER_PREFIX["en"])
     user_message = prefix + transcript

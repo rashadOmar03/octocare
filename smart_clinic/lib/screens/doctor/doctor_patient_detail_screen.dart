@@ -34,6 +34,11 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
   List<SensorReading> _sensorHistory = [];
   bool _isLoading = true;
   bool _showInactive = true;
+  bool _savingMedicalInfo = false;
+  final _bloodTypeController = TextEditingController();
+  final _allergiesController = TextEditingController();
+  final _chronicDiseasesController = TextEditingController();
+  final _existingConditionsController = TextEditingController();
 
   @override
   void initState() {
@@ -48,6 +53,10 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
   @override
   void dispose() {
     _tabController.dispose();
+    _bloodTypeController.dispose();
+    _allergiesController.dispose();
+    _chronicDiseasesController.dispose();
+    _existingConditionsController.dispose();
     super.dispose();
   }
 
@@ -72,6 +81,7 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
               : profileData,
         };
       } catch (_) {}
+      _syncMedicalInfoControllers();
       _records = await _medicalService.getPatientRecords(patientId: _patientId, includeInactive: true);
       _prescriptions = await _medicalService.getPrescriptions(patientId: _patientId, includeInactive: true);
       _sensorHistory = await _sensorService.getHistory(patientId: _patientId, period: 'monthly');
@@ -517,6 +527,13 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
                 switch (action) {
                   case 'view':
                     Navigator.pushNamed(context, AppRoutes.doctorRecordDetail, arguments: r);
+                  case 'edit':
+                    final changed = await Navigator.pushNamed<bool>(
+                      context,
+                      AppRoutes.doctorConsultation,
+                      arguments: {'patient': _patient, 'record_id': r.id},
+                    );
+                    if (changed == true && mounted) _loadData();
                   case 'toggle':
                     await _toggleRecord(r);
                   case 'delete':
@@ -525,6 +542,7 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
               },
               itemBuilder: (ctx) => [
                 PopupMenuItem(value: 'view', child: Text(AppLocalizations.tr('view'))),
+                PopupMenuItem(value: 'edit', child: Text(AppLocalizations.tr('edit'))),
                 PopupMenuItem(
                   value: 'toggle',
                   child: Text(r.isActive ? AppLocalizations.tr('deactivate') : AppLocalizations.tr('activate')),
@@ -738,17 +756,84 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (profile['gender'] != null)
-          ListTile(
-            leading: const Icon(Icons.wc),
-            title: Text(AppLocalizations.tr('gender')),
-            subtitle: Text(AppLocalizations.trValue(profile['gender'])),
+        TextField(
+          controller: _bloodTypeController,
+          decoration: InputDecoration(
+            labelText: AppLocalizations.tr('blood_type'),
+            prefixIcon: const Icon(Icons.bloodtype),
           ),
-        if (profile['blood_type'] != null) ListTile(leading: const Icon(Icons.bloodtype), title: Text(AppLocalizations.tr('blood_type')), subtitle: Text(profile['blood_type'])),
-        if (profile['allergies'] != null) ListTile(leading: const Icon(Icons.warning_amber), title: Text(AppLocalizations.tr('allergies')), subtitle: Text(profile['allergies'])),
-        if (profile['chronic_diseases'] != null) ListTile(leading: const Icon(Icons.medical_services), title: Text(AppLocalizations.tr('chronic_diseases')), subtitle: Text(profile['chronic_diseases'])),
-        if (profile['existing_conditions'] != null) ListTile(leading: const Icon(Icons.health_and_safety), title: Text(AppLocalizations.tr('existing_conditions')), subtitle: Text(profile['existing_conditions'])),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _allergiesController,
+          maxLines: 2,
+          decoration: InputDecoration(
+            labelText: AppLocalizations.tr('allergies'),
+            prefixIcon: const Icon(Icons.warning_amber),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _chronicDiseasesController,
+          maxLines: 2,
+          decoration: InputDecoration(
+            labelText: AppLocalizations.tr('chronic_diseases'),
+            prefixIcon: const Icon(Icons.medical_services),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _existingConditionsController,
+          maxLines: 2,
+          decoration: InputDecoration(
+            labelText: AppLocalizations.tr('existing_conditions'),
+            prefixIcon: const Icon(Icons.health_and_safety),
+          ),
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _savingMedicalInfo ? null : _saveMedicalInfo,
+            icon: _savingMedicalInfo
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.save),
+            label: Text(AppLocalizations.tr('save_changes')),
+          ),
+        ),
       ],
     );
+  }
+
+  void _syncMedicalInfoControllers() {
+    final profile = _patient?['profile'] is Map
+        ? Map<String, dynamic>.from(_patient!['profile'] as Map)
+        : _patient;
+    if (profile == null) return;
+    _bloodTypeController.text = profile['blood_type']?.toString() ?? '';
+    _allergiesController.text = profile['allergies']?.toString() ?? '';
+    _chronicDiseasesController.text = profile['chronic_diseases']?.toString() ?? '';
+    _existingConditionsController.text = profile['existing_conditions']?.toString() ?? '';
+  }
+
+  Future<void> _saveMedicalInfo() async {
+    if (_patientId == null) return;
+    setState(() => _savingMedicalInfo = true);
+    try {
+      await ApiService.instance.put('/patients/profile/$_patientId', {
+        'blood_type': _bloodTypeController.text.trim(),
+        'allergies': _allergiesController.text.trim(),
+        'chronic_diseases': _chronicDiseasesController.text.trim(),
+        'existing_conditions': _existingConditionsController.text.trim(),
+      });
+      if (mounted) {
+        showSuccessSnackBar(context, AppLocalizations.tr('profile_updated'));
+        await _loadData();
+      }
+    } catch (e) {
+      if (mounted) showErrorSnackBar(context, e);
+    } finally {
+      if (mounted) setState(() => _savingMedicalInfo = false);
+    }
   }
 }

@@ -53,12 +53,31 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
   late List<Map<String, dynamic>> _pmhItems;
   late List<Map<String, dynamic>> _chronicItems;
   late List<Map<String, dynamic>> _existingConditionItems;
+  late List<Map<String, dynamic>> _clinicalFindingsItems;
+  late List<Map<String, dynamic>> _familyHistoryItems;
+  late List<Map<String, dynamic>> _socialHistoryItems;
+  late List<Map<String, dynamic>> _surgeriesItems;
+  late Map<String, List<Map<String, dynamic>>> _objectiveItems;
+  late TextEditingController _clinicalSummaryController;
+  late TextEditingController _smokingController;
+  late TextEditingController _alcoholController;
   DateTime? _prescriptionActiveUntil;
 
   @override
   void initState() {
     super.initState();
+    _clinicalSummaryController = TextEditingController();
+    _smokingController = TextEditingController();
+    _alcoholController = TextEditingController();
     _hydrateFromProps();
+  }
+
+  @override
+  void dispose() {
+    _clinicalSummaryController.dispose();
+    _smokingController.dispose();
+    _alcoholController.dispose();
+    super.dispose();
   }
 
   @override
@@ -67,7 +86,8 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
     if (oldWidget.structured != widget.structured ||
         oldWidget.prescription != widget.prescription ||
         oldWidget.currentMedications != widget.currentMedications ||
-        oldWidget.symptomsList != widget.symptomsList) {
+        oldWidget.symptomsList != widget.symptomsList ||
+        oldWidget.editable != widget.editable) {
       _hydrateFromProps();
     }
   }
@@ -110,10 +130,27 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
     _planItems = plan.map((p) => {'text': p, 'active': true}).toList();
 
     final mh = _medicalHistory;
+    final fhx = _asStrings(mh['family_history']);
+    final social = _asStrings(mh['social_history']);
+    final surgeries = _asStrings(mh['previous_surgeries']);
+    final smoking = mh['smoking']?.toString().trim() ?? '';
+    final alcohol = mh['alcohol']?.toString().trim() ?? '';
     _allergies = _asStrings(mh['allergies']).map((e) => {'name': e, 'active': true}).toList();
     _pmhItems = _asStrings(mh['past_medical_history']).map((e) => {'name': e, 'active': true}).toList();
     _chronicItems = _asStrings(mh['chronic_diseases']).map((e) => {'name': e, 'active': true}).toList();
     _existingConditionItems = _asStrings(mh['existing_conditions']).map((e) => {'name': e, 'active': true}).toList();
+    _clinicalFindingsItems = _asStrings(_structured['clinical_findings']).map((e) => {'name': e, 'active': true}).toList();
+    _familyHistoryItems = fhx.map((e) => {'name': e, 'active': true}).toList();
+    _socialHistoryItems = social.map((e) => {'name': e, 'active': true}).toList();
+    _surgeriesItems = surgeries.map((e) => {'name': e, 'active': true}).toList();
+    _clinicalSummaryController.text = (_structured['clinical_summary'] ?? '').toString();
+    _smokingController.text = smoking;
+    _alcoholController.text = alcohol;
+
+    _objectiveItems = {};
+    for (final key in ['physical_exam', 'ecg', 'laboratory_results', 'imaging', 'echo']) {
+      _objectiveItems[key] = _asStrings(_objective[key]).map((e) => {'name': e, 'active': true}).toList();
+    }
 
     final rawUntil = _structured['prescription_active_until'];
     if (rawUntil != null && rawUntil.toString().trim().isNotEmpty) {
@@ -239,7 +276,23 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
     mh['past_medical_history'] = _pmhItems.where((e) => e['active'] != false).map((e) => e['name'].toString()).toList();
     mh['chronic_diseases'] = _chronicItems.where((e) => e['active'] != false).map((e) => e['name'].toString()).toList();
     mh['existing_conditions'] = _existingConditionItems.where((e) => e['active'] != false).map((e) => e['name'].toString()).toList();
+    mh['family_history'] = _familyHistoryItems.where((e) => e['active'] != false).map((e) => e['name'].toString()).toList();
+    mh['social_history'] = _socialHistoryItems.where((e) => e['active'] != false).map((e) => e['name'].toString()).toList();
+    mh['previous_surgeries'] = _surgeriesItems.where((e) => e['active'] != false).map((e) => e['name'].toString()).toList();
+    mh['smoking'] = _smokingController.text.trim().isEmpty ? null : _smokingController.text.trim();
+    mh['alcohol'] = _alcoholController.text.trim().isEmpty ? null : _alcoholController.text.trim();
     _structured['medical_history'] = mh;
+
+    _structured['clinical_summary'] = _clinicalSummaryController.text.trim();
+    _structured['clinical_findings'] =
+        _clinicalFindingsItems.where((e) => e['active'] != false).map((e) => e['name'].toString()).toList();
+
+    final obj = Map<String, dynamic>.from(_objective);
+    for (final entry in _objectiveItems.entries) {
+      obj[entry.key] = entry.value.where((e) => e['active'] != false).map((e) => e['name'].toString()).toList();
+    }
+    soap['objective'] = obj;
+    _structured['soap_note'] = soap;
 
     if (widget.followUpController != null) {
       final lines = widget.followUpController!.text
@@ -416,10 +469,6 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
     return {};
   }
 
-  List<String> get _clinicalFindings => _asStrings(_structured['clinical_findings']);
-
-  String get _clinicalSummary => (_structured['clinical_summary'] ?? '').toString().trim();
-
   List<String> get _followUpItems {
     final items = _structured['follow_up_items'];
     if (items is List) return _asStrings(items);
@@ -540,21 +589,63 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
   }
 
   Widget _clinicalSummarySection(BuildContext context) {
-    final summary = _clinicalSummary;
-    if (summary.isEmpty) return const SizedBox.shrink();
+    final summary = _clinicalSummaryController.text.trim();
+    if (summary.isEmpty && !widget.editable) return const SizedBox.shrink();
+    if (!widget.editable) {
+      return _card(
+        context,
+        AppLocalizations.tr('clinical_summary'),
+        Text(
+          summary,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.5),
+        ),
+      );
+    }
     return _card(
       context,
       AppLocalizations.tr('clinical_summary'),
-      Text(
-        summary,
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.5),
+      TextField(
+        controller: _clinicalSummaryController,
+        maxLines: 4,
+        decoration: _voiceInputDecoration(_clinicalSummaryController),
+        onChanged: (_) => _notifyParent(),
       ),
     );
   }
 
   Widget _clinicalFindingsSection(BuildContext context) {
-    final findings = _clinicalFindings;
-    if (findings.isEmpty) return const SizedBox.shrink();
+    if (_clinicalFindingsItems.isEmpty && !widget.editable) return const SizedBox.shrink();
+    if (!widget.editable) {
+      final findings = _clinicalFindingsItems.map((e) => e['name'].toString()).toList();
+      return Card(
+        margin: const EdgeInsets.only(bottom: 14),
+        color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.25),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle(context, AppLocalizations.tr('clinical_findings')),
+              const SizedBox(height: 10),
+              ...findings.map(
+                (f) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.warning_amber_rounded, size: 18, color: Theme.of(context).colorScheme.error),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(f, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500))),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
       color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.25),
@@ -565,17 +656,39 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
           children: [
             _sectionTitle(context, AppLocalizations.tr('clinical_findings')),
             const SizedBox(height: 10),
-            ...findings.map(
-              (f) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.warning_amber_rounded, size: 18, color: Theme.of(context).colorScheme.error),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(f, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500))),
-                  ],
-                ),
+            for (var i = 0; i < _clinicalFindingsItems.length; i++)
+              _editableToggleRow(
+                label: _clinicalFindingsItems[i]['name'].toString(),
+                subtitle: '',
+                active: _clinicalFindingsItems[i]['active'] != false,
+                onToggle: () {
+                  _clinicalFindingsItems[i]['active'] = _clinicalFindingsItems[i]['active'] == false;
+                  _notifyParent();
+                },
+                onEdit: () async {
+                  final value = await _promptText(AppLocalizations.tr('clinical_findings'), initial: _clinicalFindingsItems[i]['name'].toString());
+                  if (value != null && value.isNotEmpty) {
+                    _clinicalFindingsItems[i]['name'] = value;
+                    _notifyParent();
+                  }
+                },
+                onDelete: () {
+                  _clinicalFindingsItems.removeAt(i);
+                  _notifyParent();
+                },
+              ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () async {
+                  final value = await _promptText(AppLocalizations.tr('add_finding'));
+                  if (value != null && value.isNotEmpty) {
+                    _clinicalFindingsItems.add({'name': value, 'active': true});
+                    _notifyParent();
+                  }
+                },
+                icon: const Icon(Icons.add),
+                label: Text(AppLocalizations.tr('add_finding')),
               ),
             ),
           ],
@@ -723,13 +836,43 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
                   items: _pmhItems,
                   addLabel: AppLocalizations.tr('add_pmh_item'),
                 ),
-                _historyCategory(context, AppLocalizations.tr('family_history'), fhx),
-                _historyCategory(context, AppLocalizations.tr('social_history'), social),
-                if (smoking.isNotEmpty)
-                  _historyCategory(context, AppLocalizations.tr('smoking_status'), [smoking]),
-                if (alcohol.isNotEmpty)
-                  _historyCategory(context, AppLocalizations.tr('alcohol_use'), [alcohol]),
-                _historyCategory(context, AppLocalizations.tr('previous_surgeries'), surgeries),
+                _editableStringItems(
+                  context,
+                  title: AppLocalizations.tr('family_history'),
+                  items: _familyHistoryItems,
+                  addLabel: AppLocalizations.tr('add_family_history'),
+                ),
+                _editableStringItems(
+                  context,
+                  title: AppLocalizations.tr('social_history'),
+                  items: _socialHistoryItems,
+                  addLabel: AppLocalizations.tr('add_social_history'),
+                ),
+                if (widget.editable) ...[
+                  TextField(
+                    controller: _smokingController,
+                    decoration: _voiceInputDecoration(_smokingController).copyWith(labelText: AppLocalizations.tr('smoking_status')),
+                    onChanged: (_) => _notifyParent(),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _alcoholController,
+                    decoration: _voiceInputDecoration(_alcoholController).copyWith(labelText: AppLocalizations.tr('alcohol_use')),
+                    onChanged: (_) => _notifyParent(),
+                  ),
+                  const SizedBox(height: 8),
+                ] else ...[
+                  if (smoking.isNotEmpty)
+                    _historyCategory(context, AppLocalizations.tr('smoking_status'), [smoking]),
+                  if (alcohol.isNotEmpty)
+                    _historyCategory(context, AppLocalizations.tr('alcohol_use'), [alcohol]),
+                ],
+                _editableStringItems(
+                  context,
+                  title: AppLocalizations.tr('previous_surgeries'),
+                  items: _surgeriesItems,
+                  addLabel: AppLocalizations.tr('add_surgery'),
+                ),
               ],
             ),
           ),
@@ -948,12 +1091,36 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
   }
 
   Widget _objectiveSection(BuildContext context) {
-    if (widget.editable && widget.objectiveController != null) {
-      return TextField(
-        controller: widget.objectiveController,
-        maxLines: 5,
-        decoration: _voiceInputDecoration(widget.objectiveController!),
-        onChanged: (_) => _notifyParent(),
+    if (widget.editable) {
+      final sections = <MapEntry<String, String>>[
+        MapEntry('physical_exam', AppLocalizations.tr('physical_examination')),
+        MapEntry('ecg', AppLocalizations.tr('ecg')),
+        MapEntry('laboratory_results', AppLocalizations.tr('labs')),
+        MapEntry('imaging', AppLocalizations.tr('imaging')),
+        MapEntry('echo', AppLocalizations.tr('echo')),
+      ];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final section in sections)
+            _editableStringItems(
+              context,
+              title: section.value,
+              items: _objectiveItems[section.key] ?? [],
+              addLabel: AppLocalizations.tr('add_item'),
+            ),
+          if (widget.objectiveController != null) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: widget.objectiveController,
+              maxLines: 4,
+              decoration: _voiceInputDecoration(widget.objectiveController!).copyWith(
+                labelText: AppLocalizations.tr('soap_objective'),
+              ),
+              onChanged: (_) => _notifyParent(),
+            ),
+          ],
+        ],
       );
     }
 
@@ -1183,8 +1350,6 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
             style: Theme.of(context).textTheme.bodyMedium,
           );
 
-    final assessmentItems = _asStrings(_soap['assessment']);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1194,18 +1359,10 @@ class _StructuredSoapViewState extends State<StructuredSoapView> {
         Text(AppLocalizations.tr('soap_notes'), style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
         _symptomsSection(context),
-        _diagnosesSection(context),
         _card(context, AppLocalizations.tr('soap_subjective'), subjective),
         _medicalHistorySection(context),
         _card(context, AppLocalizations.tr('soap_objective'), _objectiveSection(context)),
-        if (!widget.editable)
-          _card(
-            context,
-            AppLocalizations.tr('soap_assessment'),
-            widget.assessmentController?.text.trim().isNotEmpty == true
-                ? Text(widget.assessmentController!.text, style: Theme.of(context).textTheme.bodyMedium)
-                : _numberedList(context, assessmentItems),
-          ),
+        _diagnosesSection(context),
         _planSection(context),
         _followUpSection(context),
         _prescriptionSection(context),

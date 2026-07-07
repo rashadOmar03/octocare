@@ -134,13 +134,9 @@ def _detect_experiencer(context: str) -> Experiencer:
 
 
 def _find_in_source(name: str, source: str) -> tuple[int, int, str]:
-    if not name or not source:
-        return -1, -1, ""
-    for term in {name, name.lower(), name.title()}:
-        idx = source.lower().find(term.lower())
-        if idx >= 0:
-            return idx, idx + len(term), _snippet(source, idx, idx + len(term))
-    return -1, -1, ""
+    from evidence_match import find_in_source
+
+    return find_in_source(name, source)
 
 
 def _find_med_in_source(name: str, action: MedAction, source: str) -> tuple[int, int, str]:
@@ -303,8 +299,17 @@ def reconcile_medications(data: dict[str, Any], source_text: str) -> dict[str, A
             continue
         if action in (MedAction.START, MedAction.ONE_TIME, MedAction.CONDITIONAL, MedAction.UNKNOWN):
             if action == MedAction.UNKNOWN:
-                med["action"] = MedAction.CONTINUE.value
-                current.append(_strip_internal_med_fields(med))
+                ctx = med.get("source_evidence") or med.get("name") or ""
+                if re.search(r"\b(?:start|begin|initiate|prescrib|اكتب|هن(?:بدأ|كتب|زود)|new\s+rx)\b", ctx, re.I):
+                    med["action"] = MedAction.START.value
+                    prescription.append(_strip_internal_med_fields(med))
+                elif re.search(
+                    r"\b(?:on|take|taking|continue|chronic|home|من\s+زمان|بيداوم|ياخد|current)\b", ctx, re.I
+                ):
+                    med["action"] = MedAction.CONTINUE.value
+                    current.append(_strip_internal_med_fields(med))
+                else:
+                    current.append(_strip_internal_med_fields(med))
             else:
                 prescription.append(_strip_internal_med_fields(med))
         elif action == MedAction.CONTINUE:
@@ -428,13 +433,22 @@ def _diagnosis_explicitly_documented(name: str, ctx: str, source_text: str) -> b
     """Require diagnostic language near the term — not symptom-only inference."""
     diagnostic_cues = re.compile(
         r"(?:diagnos|assessment|impression|dx\b|icd|condition|disease|disorder|syndrome|"
-        r"تشخيص|تشخيصات|حالة|مرض|متلازمة|Assessment|Plan:)",
+        r"NSTEMI|STEMI|ACS|CHF|CAD|COPD|CKD|"
+        r"تشخيص|تشخيصات|حالة|مرض|متلازمة|Assessment|Plan:|الانطباع|القصة)",
         re.IGNORECASE,
     )
     blob = f"{ctx} {name}"
     if diagnostic_cues.search(blob):
         return True
-    if re.search(r"(?:possible|probable|suspect|rule\s*out|\?|احتمال|مشتبه|محتمل)", blob, re.I):
+    if re.search(
+        r"(?:possible|probable|suspect|rule\s*out|likely|vs\.?|\?|"
+        r"احتمال|مشتبه|محتمل|محتملة|استبعاد|rule-out|working\s+dx)",
+        blob,
+        re.I,
+    ):
+        return True
+    # Clinical abbreviations / structured dx often appear without cue words
+    if re.search(r"\b(?:NSTEMI|STEMI|ACS|CHF|CAD|DM|HTN|CKD|COPD|AF|DVT|PE)\b", name, re.I):
         return True
     # Explicit numbered assessment lines in source
     if source_text and re.search(rf"(?:^|\n)\s*(?:\d+[\.\)]\s*)?{re.escape(name[:20])}", source_text, re.I):

@@ -19,7 +19,7 @@ Return ONE valid JSON object ONLY:
 {
   "unsupported": [
     {
-      "category": "symptoms|diagnoses|medications_current|prescription|medications_discontinued|allergies|past_medical_history|family_history|plan|follow_up|physical_exam|laboratory_results|imaging|ecg|echo|clinical_findings|doctor_notes|chief_complaint",
+      "category": "symptoms|diagnoses|medications_current|prescription|medications_discontinued|allergies|past_medical_history|chronic_diseases|family_history|social_history|plan|follow_up|physical_exam|laboratory_results|imaging|ecg|echo|clinical_findings|clinical_summary|subjective|assessment|doctor_notes|chief_complaint",
       "value": "exact item text from extraction to remove",
       "reason": "brief reason — must say it is not stated in source"
     }
@@ -144,6 +144,8 @@ def _apply_removals(data: dict[str, Any], unsupported: list[dict[str, Any]]) -> 
         ("allergies", "allergies"),
         ("past_medical_history", "past_medical_history"),
         ("family_history", "family_history"),
+        ("chronic_diseases", "chronic_diseases"),
+        ("social_history", "social_history"),
     ]:
         if cat in by_category:
             mh[mh_key] = _remove_by_norm(mh.get(mh_key) or [], by_category[cat])
@@ -155,7 +157,20 @@ def _apply_removals(data: dict[str, Any], unsupported: list[dict[str, Any]]) -> 
         if _norm_key(cc) in keys:
             payload["chief_complaint"] = None
 
+    if "clinical_summary" in by_category:
+        keys = by_category["clinical_summary"]
+        summary = str(payload.get("clinical_summary") or "")
+        if _norm_key(summary) in keys or any(k in _norm_key(summary) for k in keys if len(k) > 6):
+            payload["clinical_summary"] = ""
+
     soap = dict(payload.get("soap_note") or {}) if isinstance(payload.get("soap_note"), dict) else {}
+    if "subjective" in by_category:
+        subj = str(soap.get("subjective") or "")
+        keys = by_category["subjective"]
+        if _norm_key(subj) in keys:
+            soap["subjective"] = ""
+    if "assessment" in by_category:
+        soap["assessment"] = _remove_by_norm(_as_str_list(soap.get("assessment")), by_category["assessment"])
     if "plan" in by_category:
         soap["plan"] = _remove_by_norm(_as_str_list(soap.get("plan")), by_category["plan"])
 

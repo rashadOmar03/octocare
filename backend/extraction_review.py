@@ -115,6 +115,9 @@ def _filter_suggestions_with_evidence(
         if _snippet_in_transcript(snippet, transcript):
             out.append(s)
     return out
+
+
+def _already_present(value: str, existing: set[str]) -> bool:
     key = _norm_key(value)
     if not key or key in existing:
         return True

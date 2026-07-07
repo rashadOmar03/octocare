@@ -61,7 +61,8 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
-  bool get _isEditOnly => _appointment?.status == 'completed';
+  bool get _isEditOnly =>
+      _appointment?.status == 'completed' || (_recordLoaded && _recordId != null && _appointment == null);
   bool get _hasSavedRecord => _recordId != null || _recordLoaded || _appointment?.medicalRecordId != null;
   bool get _isStandalone => _appointment == null && _standalonePatient != null;
   Map<String, dynamic>? _standalonePatient;
@@ -78,11 +79,14 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
       if (args['patient'] is Map) {
         _standalonePatient = Map<String, dynamic>.from(args['patient'] as Map);
       }
+      if (args['record_id'] != null) {
+        _recordId = args['record_id'].toString();
+      }
     }
-    if (_appointment == null && _standalonePatient == null) return;
+    if (_appointment == null && _standalonePatient == null && _recordId == null) return;
 
     await _refreshAppointmentFromServer();
-    if (_appointment?.id != null || _appointment?.medicalRecordId != null) {
+    if (_recordId != null || _appointment?.id != null || _appointment?.medicalRecordId != null) {
       await _loadExistingRecord();
     }
   }
@@ -733,42 +737,6 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
     );
   }
 
-  void _enableManualEdit() {
-    setState(() {
-      _soapEditable = true;
-      _hasExtracted = true;
-      _structuredData ??= {
-        'soap_note': {
-          'subjective': '',
-          'objective': <String, dynamic>{},
-          'assessment': <dynamic>[],
-          'plan': <dynamic>[],
-        },
-        'symptoms': <dynamic>[],
-        'diagnoses': <dynamic>[],
-        'prescription': <dynamic>[],
-        'medications_current': <dynamic>[],
-      };
-      _soapViewGeneration++;
-    });
-    if (_tabController.index != 0) {
-      _tabController.animateTo(0);
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _soapSectionKey.currentContext;
-      if (ctx != null) {
-        Scrollable.ensureVisible(
-          ctx,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeInOut,
-        );
-      }
-    });
-    if (mounted) {
-      showSuccessSnackBar(context, AppLocalizations.tr('manual_edit_enabled'));
-    }
-  }
-
   void _clearAll() {
     _transcriptController.clear();
     _chiefComplaintController.clear();
@@ -948,7 +916,7 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
                         prescription: _prescription,
                         currentMedications: _currentMedications,
                         symptomsList: _symptomsList,
-                        editable: _soapEditable || _isEditOnly || _recordLoaded,
+                        editable: true,
                         onChanged: _onStructuredChanged,
                         subjectiveController: _soapSController,
                         objectiveController: _soapOController,
@@ -1008,27 +976,16 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    if (_hasExtracted && !_isEditOnly)
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _isLoading ? null : _rejectNotes,
-                          icon: const Icon(Icons.close),
-                          label: Text(AppLocalizations.tr('reject_clear')),
-                        ),
-                      ),
-                    if (_hasExtracted && !_isEditOnly) const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _isLoading ? null : _enableManualEdit,
-                        icon: const Icon(Icons.edit),
-                        label: Text(AppLocalizations.tr('alter_manually')),
-                      ),
+                if (_hasExtracted && !_isEditOnly)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _rejectNotes,
+                      icon: const Icon(Icons.close),
+                      label: Text(AppLocalizations.tr('reject_clear')),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
+                  ),
+                if (_hasExtracted && !_isEditOnly) const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(

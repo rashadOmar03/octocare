@@ -15,7 +15,7 @@ from schemas import (
     ProfileCreate, ProfileUpdate, ProfileResponse,
     NotificationResponse, ProfileUpdateRequestCreate, ProfileUpdateRequestResponse,
 )
-from auth import get_current_user
+from auth import get_current_user, require_role
 from access_control import assert_patient_profile_access, assert_document_access
 from profile_utils import profile_personal_info_complete, field_ok
 
@@ -98,6 +98,31 @@ def update_profile(
 
     if profile.first_name and profile.last_name:
         profile.is_complete = True
+
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+
+@router.put("/profile/{patient_id}", response_model=ProfileResponse)
+def update_patient_profile_by_id(
+    patient_id: str,
+    data: ProfileUpdate,
+    current_user: User = Depends(require_role("doctor", "receptionist", "admin")),
+    db: Session = Depends(get_db),
+):
+    assert_patient_profile_access(current_user, patient_id, db)
+    profile = db.query(Profile).filter(Profile.id == patient_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    update_data = data.model_dump(exclude_unset=True)
+    if current_user.role == "doctor":
+        allowed = {"blood_type", "allergies", "chronic_diseases", "existing_conditions"}
+        update_data = {k: v for k, v in update_data.items() if k in allowed}
+
+    for field, value in update_data.items():
+        setattr(profile, field, value)
 
     db.commit()
     db.refresh(profile)

@@ -242,6 +242,58 @@ def safe_enrich_from_transcript(data: dict[str, Any], transcript: str) -> dict[s
         data["soap_note"]["plan"] = _dedupe_strings(plan)
     data["follow_up_items"] = _dedupe_strings(follow)
     data["follow_up"] = "; ".join(follow) if follow else data.get("follow_up")
+
+    current_meds = data.get("medications_current") if isinstance(data.get("medications_current"), list) else []
+    rx = data.get("prescription") if isinstance(data.get("prescription"), list) else []
+    known_names = {_norm_key(str(m.get("name") if isinstance(m, dict) else m)) for m in current_meds + rx}
+    known_names.discard("")
+
+    med_pattern = re.compile(
+        r"(?:(?:on|take|taking|continue|start|stop|hold|"
+        r"ي(?:اخد|أخذ|تناول)|(?:من|ل(?:ه|ها))\s+زمان|هن(?:بدأ|وقف|زود|كتب)|اكتب)\s+)?"
+        r"([A-Za-z][A-Za-z\-]{3,24})\s*(?:(\d+(?:\.\d+)?)\s*(mg|g|mcg|units?|ml))?",
+        re.IGNORECASE,
+    )
+    for m in med_pattern.finditer(text):
+        if _is_negated_near(text, m.start(), m.end()):
+            continue
+        name = (m.group(1) or "").strip()
+        if not name or len(name) < 4:
+            continue
+        nk = _norm_key(name)
+        if nk in known_names:
+            continue
+        ctx = _snippet(text, m.start(), m.end())
+        action = "UNKNOWN"
+        if re.search(r"\b(?:start|begin|prescrib|هن(?:بدأ|كتب|زود)|اكتب|new)\b", ctx, re.I):
+            action = "START"
+        elif re.search(r"\b(?:stop|hold|وقف|بلاش|cancel)\b", ctx, re.I):
+            action = "STOP"
+        elif re.search(r"\b(?:on|take|continue|ي(?:اخد|أخذ)|chronic|home|من\s+زمان)\b", ctx, re.I):
+            action = "CONTINUE"
+        dose = f"{m.group(2)} {m.group(3)}".strip() if m.group(2) else None
+        item = {
+            "name": name.title() if name.islower() else name,
+            "action": action,
+            "dosage": dose,
+            "frequency": None,
+            "route": None,
+            "duration": None,
+            "notes": None,
+            "source_evidence": ctx,
+        }
+        if action == "START":
+            rx.append(item)
+        elif action == "STOP":
+            disc = data.get("medications_discontinued") if isinstance(data.get("medications_discontinued"), list) else []
+            disc.append(name)
+            data["medications_discontinued"] = _dedupe_strings(disc)
+        else:
+            current_meds.append(item)
+        known_names.add(nk)
+
+    data["medications_current"] = current_meds
+    data["prescription"] = rx
     return data
 
 
