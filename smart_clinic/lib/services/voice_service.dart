@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
+
 import 'api_service.dart';
 import 'voice_platform.dart';
 
@@ -53,11 +55,17 @@ class VoiceService {
 
   Future<void> startRecording() async {
     if (_platform.isRecording) return;
-    if (!await ensureMicPermission()) {
-      throw Exception('Microphone permission is required for voice input.');
+    try {
+      if (!await ensureMicPermission()) {
+        throw Exception('Microphone permission is required for voice input.');
+      }
+      await _platform.startRecording();
+      _recordingStartedAt = DateTime.now();
+    } on MissingPluginException {
+      throw Exception(
+        'Voice input is not available on this device. Refresh the page or update the app, then try again.',
+      );
     }
-    await _platform.startRecording();
-    _recordingStartedAt = DateTime.now();
   }
 
   Future<String> stopAndTranscribe({String? language}) async {
