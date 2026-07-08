@@ -4,6 +4,7 @@ import '../../services/admin_service.dart';
 import '../../config/routes.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../utils/ui_helpers.dart';
 import '../../widgets/bottom_nav.dart';
 
 class AdminSettingsScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   final _durationController = TextEditingController();
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isPurging = false;
   final Set<int> _workingDays = {5, 6, 0, 1, 2, 3};
 
   static const _allDays = [5, 6, 0, 1, 2, 3, 4];
@@ -117,6 +119,66 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     return null;
   }
 
+  Future<void> _purgeAllPatients() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(AppLocalizations.tr('purge_patients_title')),
+        content: Text(AppLocalizations.tr('purge_patients_body')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.tr('cancel'))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(AppLocalizations.tr('purge_patients_confirm')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final typed = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: Text(AppLocalizations.tr('purge_patients_type_title')),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              hintText: 'DELETE_ALL_PATIENTS',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppLocalizations.tr('cancel'))),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: Text(AppLocalizations.tr('confirm')),
+            ),
+          ],
+        );
+      },
+    );
+    if (typed != 'DELETE_ALL_PATIENTS' || !mounted) return;
+
+    setState(() => _isPurging = true);
+    try {
+      final result = await _service.purgeAllPatients();
+      final stats = Map<String, dynamic>.from(result['stats'] as Map? ?? {});
+      if (mounted) {
+        showSuccessSnackBar(
+          context,
+          AppLocalizations.tr('purge_patients_success')
+              .replaceAll('{count}', '${stats['patients_deleted'] ?? 0}'),
+        );
+      }
+    } catch (e) {
+      if (mounted) showErrorSnackBar(context, e);
+    }
+    if (mounted) setState(() => _isPurging = false);
+  }
+
   @override
   void dispose() {
     _clinicNameController.dispose();
@@ -197,6 +259,30 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                       Icon(Icons.notifications_active, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 12),
                       Expanded(child: Text(AppLocalizations.tr('in_app_notifications_info'))),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(AppLocalizations.tr('danger_zone'), style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.error)),
+              const SizedBox(height: 8),
+              Card(
+                color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.35),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(AppLocalizations.tr('purge_patients_hint')),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _isPurging ? null : _purgeAllPatients,
+                        icon: _isPurging
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.delete_forever),
+                        label: Text(AppLocalizations.tr('purge_patients_button')),
+                        style: OutlinedButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+                      ),
                     ],
                   ),
                 ),

@@ -892,24 +892,33 @@ def purge_patients(
             status_code=400,
             detail='Send {"confirm": "DELETE_ALL_PATIENTS"} to proceed.',
         )
-    stats = purge_all_patients(db)
-    log_audit(
-        db,
-        current_user.id,
-        "purge_all_patients",
-        "system",
-        "patients",
-        f"Admin purged all patients: {stats}",
-    )
-    db.commit()
-    _notify_staff(
-        db,
-        "Patient data reset",
-        f"All patient accounts were removed by admin ({stats.get('patients_deleted', 0)} patients).",
-        exclude_user_id=current_user.id,
-    )
-    db.commit()
-    return {"message": "All patients and related data deleted.", "stats": stats}
+    try:
+        stats = purge_all_patients(db)
+        log_audit(
+            db,
+            current_user.id,
+            "purge_all_patients",
+            "system",
+            "patients",
+            f"Admin purged all patients: {stats}",
+        )
+        db.commit()
+        try:
+            _notify_staff(
+                db,
+                "Patient data reset",
+                f"All patient accounts were removed by admin ({stats.get('patients_deleted', 0)} patients).",
+                exclude_user_id=current_user.id,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+        return {"message": "All patients and related data deleted.", "stats": stats}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Patient purge failed: {exc}") from exc
 
 
 @router.post("/specialties", response_model=SpecialtyResponse, status_code=status.HTTP_201_CREATED)

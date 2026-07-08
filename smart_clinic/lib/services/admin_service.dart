@@ -100,6 +100,11 @@ class AdminService {
     await _api.delete('/admin/users/$userId');
   }
 
+  Future<Map<String, dynamic>> purgeAllPatients() async {
+    final response = await _api.post('/admin/purge-patients', {'confirm': 'DELETE_ALL_PATIENTS'});
+    return Map<String, dynamic>.from(response);
+  }
+
   Future<Map<String, dynamic>> getPatientDetail(String userId) async {
     final response = await _api.get('/admin/patients/$userId/detail');
     return Map<String, dynamic>.from(response);
