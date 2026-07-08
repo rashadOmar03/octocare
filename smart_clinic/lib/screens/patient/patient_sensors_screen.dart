@@ -8,7 +8,6 @@ import '../../services/sensor_service.dart';
 import '../../models/sensor_reading.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/sensor_waveform_chart.dart';
-import '../../widgets/sensor_history_chart.dart';
 
 class PatientSensorsScreen extends StatefulWidget {
   const PatientSensorsScreen({super.key});
@@ -17,22 +16,17 @@ class PatientSensorsScreen extends StatefulWidget {
   State<PatientSensorsScreen> createState() => _PatientSensorsScreenState();
 }
 
-class _PatientSensorsScreenState extends State<PatientSensorsScreen> with SingleTickerProviderStateMixin {
+class _PatientSensorsScreenState extends State<PatientSensorsScreen> {
   final SensorService _service = SensorService();
   SensorReading? _latest;
   List<SensorReading> _history = [];
   List<Map<String, dynamic>> _alerts = [];
   bool _isLoading = true;
-  late TabController _periodTab;
   Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _periodTab = TabController(length: 3, vsync: this);
-    _periodTab.addListener(() {
-      if (!_periodTab.indexIsChanging) _loadHistory();
-    });
     _loadData();
     _autoRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted) _loadData(silent: true);
@@ -42,7 +36,6 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
   @override
   void dispose() {
     _autoRefreshTimer?.cancel();
-    _periodTab.dispose();
     super.dispose();
   }
 
@@ -51,7 +44,7 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
     try {
       _latest = await _service.getLatest();
       _alerts = await _service.getAlerts();
-      await _loadHistory();
+      _history = await _service.getHistory();
     } catch (e) {
       if (mounted && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -64,20 +57,6 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
         setState(() {});
       } else {
         setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _loadHistory() async {
-    try {
-      final periods = ['daily', 'weekly', 'monthly'];
-      _history = await _service.getHistory(period: periods[_periodTab.index]);
-      setState(() {});
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
-        );
       }
     }
   }
@@ -167,20 +146,8 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
             ],
             const SizedBox(height: 24),
             Text(AppLocalizations.tr('history'), style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            TabBar(
-              controller: _periodTab,
-              labelColor: Theme.of(context).colorScheme.primary,
-              unselectedLabelColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-              indicatorColor: Theme.of(context).colorScheme.primary,
-              tabs: [
-                Tab(text: AppLocalizations.tr('daily')),
-                Tab(text: AppLocalizations.tr('weekly')),
-                Tab(text: AppLocalizations.tr('monthly')),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildSignalHistoryCharts(),
+            const SizedBox(height: 12),
+            _buildHistoryList(),
             const SizedBox(height: 16),
             _buildHistoryTable(),
           ],
@@ -266,50 +233,97 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
     );
   }
 
-  Widget _buildSignalHistoryCharts() {
+  Widget _buildHistoryList() {
     if (_history.isEmpty) {
       return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(AppLocalizations.tr('no_data'))));
     }
 
-    final ordered = _history.reversed.toList();
-    final gsr = ordered.map((r) => r.gsr).whereType<double>().where((v) => v != 0).toList();
-    final ecg = ordered.map((r) => r.ecg).whereType<double>().where((v) => v != 0).toList();
-    final emg = ordered.map((r) => r.emg).whereType<double>().where((v) => v != 0).toList();
-
     return Column(
+      children: _history.map(_buildHistoryReadingCard).toList(),
+    );
+  }
+
+  Widget _buildHistoryReadingCard(SensorReading r) {
+    final ecg = r.waveformSamples('ecg');
+    final emg = r.waveformSamples('emg');
+    final gsr = r.waveformSamples('gsr');
+    final hasWaveforms = ecg.length >= 2 || emg.length >= 2 || gsr.length >= 2;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                const SizedBox(width: 6),
+                Expanded(child: Text(r.timestamp ?? '', style: Theme.of(context).textTheme.bodySmall)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _vitalChip(Icons.favorite, SensorPlotterColors.bpm, '${r.heartRate?.toInt() ?? '--'}', AppLocalizations.tr('bpm'))),
+                Expanded(child: _vitalChip(Icons.thermostat, SensorPlotterColors.temp, r.temperature?.toStringAsFixed(1) ?? '--', '°C')),
+                Expanded(child: _vitalChip(Icons.bolt, SensorPlotterColors.gsr, '${r.gsr?.toInt() ?? '--'}', 'GSR')),
+              ],
+            ),
+            if (hasWaveforms) ...[
+              const SizedBox(height: 12),
+              if (ecg.length >= 2)
+                SensorWaveformChart(
+                  title: AppLocalizations.tr('ecg'),
+                  shortLabel: 'ECG',
+                  samples: ecg,
+                  currentValue: r.ecg,
+                  color: SensorPlotterColors.ecg,
+                  height: 120,
+                ),
+              if (emg.length >= 2) ...[
+                const SizedBox(height: 8),
+                SensorWaveformChart(
+                  title: AppLocalizations.tr('emg'),
+                  shortLabel: 'EMG',
+                  samples: emg,
+                  currentValue: r.emg,
+                  color: SensorPlotterColors.emg,
+                  height: 120,
+                ),
+              ],
+              if (gsr.length >= 2) ...[
+                const SizedBox(height: 8),
+                SensorWaveformChart(
+                  title: AppLocalizations.tr('gsr_waveform'),
+                  shortLabel: 'GSR',
+                  samples: gsr,
+                  currentValue: r.gsr,
+                  color: SensorPlotterColors.gsr,
+                  height: 120,
+                ),
+              ],
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _vitalChip(IconData icon, Color color, String value, String unit) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        if (ecg.isNotEmpty)
-          SensorHistoryChart(
-            title: AppLocalizations.tr('ecg'),
-            description: AppLocalizations.tr('ecg_chart_desc'),
-            unit: '',
-            color: SensorPlotterColors.ecg,
-            values: ecg,
-          ),
-        if (emg.isNotEmpty)
-          SensorHistoryChart(
-            title: AppLocalizations.tr('emg'),
-            description: AppLocalizations.tr('emg_chart_desc'),
-            unit: '',
-            color: SensorPlotterColors.emg,
-            values: emg,
-          ),
-        if (gsr.isNotEmpty)
-          SensorHistoryChart(
-            title: AppLocalizations.tr('gsr'),
-            description: AppLocalizations.tr('gsr_chart_desc'),
-            unit: '',
-            color: SensorPlotterColors.gsr,
-            values: gsr,
-          ),
-        if (gsr.isEmpty && ecg.isEmpty && emg.isEmpty)
-          Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(AppLocalizations.tr('no_data')))),
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 4),
+        Text('$value $unit', style: TextStyle(fontWeight: FontWeight.w600, color: color)),
       ],
     );
   }
 
   Widget _buildHistoryTable() {
-    if (_history.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(AppLocalizations.tr('no_data'))));
+    if (_history.isEmpty) return const SizedBox.shrink();
 
     return Card(
       child: SingleChildScrollView(

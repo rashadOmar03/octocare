@@ -112,14 +112,14 @@ class SensorWaveformChart extends StatelessWidget {
                       child: LineChart(
                         LineChartData(
                           minX: 0,
-                          maxX: (maxSamples - 1).toDouble(),
+                          maxX: _maxX,
                           minY: _minY,
                           maxY: _maxY,
                           clipData: const FlClipData.all(),
                           gridData: FlGridData(
                             show: true,
                             drawVerticalLine: true,
-                            verticalInterval: maxSamples / 4,
+                            verticalInterval: _xGridInterval,
                             horizontalInterval: _gridInterval,
                             getDrawingHorizontalLine: (_) => FlLine(color: gridColor, strokeWidth: 0.8),
                             getDrawingVerticalLine: (_) => FlLine(color: gridColor.withValues(alpha: 0.55), strokeWidth: 0.6),
@@ -131,11 +131,15 @@ class SensorWaveformChart extends StatelessWidget {
                               sideTitles: SideTitles(
                                 showTitles: plotterStyle,
                                 reservedSize: plotterStyle ? 22 : 0,
-                                interval: maxSamples / 4,
+                                interval: _xGridInterval,
                                 getTitlesWidget: (value, meta) {
                                   if (!plotterStyle) return const SizedBox.shrink();
                                   final rounded = value.round();
-                                  if (rounded % (maxSamples ~/ 4) != 0 && rounded != 0) {
+                                  if (rounded < 0 || rounded > _maxX.round()) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  final step = _xGridInterval.round().clamp(1, 9999);
+                                  if (rounded % step != 0 && rounded != 0 && rounded != _maxX.round()) {
                                     return const SizedBox.shrink();
                                   }
                                   return Text(
@@ -189,15 +193,29 @@ class SensorWaveformChart extends StatelessWidget {
     );
   }
 
+  List<double> get _visibleSamples {
+    if (samples.isEmpty) return const [];
+    if (samples.length <= maxSamples) return samples;
+    return samples.sublist(samples.length - maxSamples);
+  }
+
+  int get _sampleCount => _visibleSamples.length;
+
+  double get _maxX {
+    if (_sampleCount < 2) return 1;
+    return (_sampleCount - 1).toDouble();
+  }
+
+  double get _xGridInterval {
+    final max = _maxX;
+    if (max <= 0) return 1;
+    if (max <= 4) return 1;
+    return (max / 4).ceilToDouble();
+  }
+
   List<FlSpot> get _spots {
-    if (samples.isEmpty) return [];
-    final startIndex = samples.length > maxSamples ? samples.length - maxSamples : 0;
-    final visible = samples.sublist(startIndex);
-    final offset = (maxSamples - visible.length).clamp(0, maxSamples);
-    return List.generate(
-      visible.length,
-      (i) => FlSpot((offset + i).toDouble(), visible[i]),
-    );
+    final visible = _visibleSamples;
+    return List.generate(visible.length, (i) => FlSpot(i.toDouble(), visible[i]));
   }
 
   String _formatAxis(double value) {
@@ -207,18 +225,22 @@ class SensorWaveformChart extends StatelessWidget {
   }
 
   double get _minY {
+    final visible = _visibleSamples;
+    if (visible.isEmpty) return 0;
     if (fixedMinY != null && fixedMaxY != null) return fixedMinY!;
-    var minY = samples.reduce((a, b) => a < b ? a : b);
-    var maxY = samples.reduce((a, b) => a > b ? a : b);
+    var minY = visible.reduce((a, b) => a < b ? a : b);
+    var maxY = visible.reduce((a, b) => a > b ? a : b);
     if (minY == maxY) return minY - 1;
     final pad = (maxY - minY) * 0.05;
     return (minY - pad).clamp(fixedMinY ?? double.negativeInfinity, double.infinity);
   }
 
   double get _maxY {
+    final visible = _visibleSamples;
+    if (visible.isEmpty) return 1;
     if (fixedMinY != null && fixedMaxY != null) return fixedMaxY!;
-    var minY = samples.reduce((a, b) => a < b ? a : b);
-    var maxY = samples.reduce((a, b) => a > b ? a : b);
+    var minY = visible.reduce((a, b) => a < b ? a : b);
+    var maxY = visible.reduce((a, b) => a > b ? a : b);
     if (minY == maxY) return maxY + 1;
     final pad = (maxY - minY) * 0.05;
     return maxY + pad;

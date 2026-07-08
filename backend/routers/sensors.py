@@ -181,7 +181,7 @@ def get_latest_reading(
 @router.get("/history/{patient_id}", response_model=list[SensorDataResponse])
 def get_sensor_history(
     patient_id: str,
-    period: str = Query("daily", regex="^(daily|weekly|monthly)$"),
+    period: str = Query("all", pattern="^(all|daily|weekly|monthly)$"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -191,15 +191,15 @@ def get_sensor_history(
         since = now - timedelta(days=1)
     elif period == "weekly":
         since = now - timedelta(weeks=1)
-    else:
+    elif period == "monthly":
         since = now - timedelta(days=30)
+    else:
+        since = None
 
-    readings = (
-        db.query(SensorData)
-        .filter(SensorData.patient_id == pid, SensorData.timestamp >= since)
-        .order_by(SensorData.timestamp.desc())
-        .all()
-    )
+    query = db.query(SensorData).filter(SensorData.patient_id == pid)
+    if since is not None:
+        query = query.filter(SensorData.timestamp >= since)
+    readings = query.order_by(SensorData.timestamp.desc()).limit(100).all()
     return readings
 
 

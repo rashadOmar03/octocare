@@ -459,11 +459,6 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
     if (_selectedPatient == null || (_heartRate == null && _temperature == null && _gsr == null)) return;
     setState(() => _isSaving = true);
     try {
-      List<double> tail(List<double> samples, [int max = 200]) {
-        if (samples.length <= max) return List<double>.from(samples);
-        return samples.sublist(samples.length - max);
-      }
-
       await _sensorService.uploadReading({
         'patient_id': _selectedPatient!['id'],
         'heart_rate': (_heartRate ?? 0).round(),
@@ -472,11 +467,11 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
         'emg': _emgSamples.isNotEmpty ? _emgSamples.last : 0,
         'gsr': _gsr ?? 0,
         'waveforms': {
-          'bpm': tail(_bpmSamples),
-          'temp': tail(_tempSamples),
-          'ecg': tail(_ecgSamples),
-          'emg': tail(_emgSamples),
-          'gsr': tail(_gsrSamples),
+          'bpm': List<double>.from(_bpmSamples),
+          'temp': List<double>.from(_tempSamples),
+          'ecg': List<double>.from(_ecgSamples),
+          'emg': List<double>.from(_emgSamples),
+          'gsr': List<double>.from(_gsrSamples),
         },
       });
       if (mounted) {

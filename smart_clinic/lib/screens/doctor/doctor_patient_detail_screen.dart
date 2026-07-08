@@ -63,7 +63,7 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
   Future<void> _refreshSensorHistory() async {
     if (_patientId == null) return;
     try {
-      final history = await _sensorService.getHistory(patientId: _patientId, period: 'monthly');
+      final history = await _sensorService.getHistory(patientId: _patientId);
       if (mounted) setState(() => _sensorHistory = history);
     } catch (_) {}
   }
@@ -103,7 +103,7 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
       _syncMedicalInfoControllers();
       _records = await _medicalService.getPatientRecords(patientId: _patientId, includeInactive: true);
       _prescriptions = await _medicalService.getPrescriptions(patientId: _patientId, includeInactive: true);
-      _sensorHistory = await _sensorService.getHistory(patientId: _patientId, period: 'monthly');
+      _sensorHistory = await _sensorService.getHistory(patientId: _patientId);
       try {
         final filesResponse = await ApiService.instance.get('/patients/documents?patient_id=$_patientId');
         if (filesResponse is List) {
