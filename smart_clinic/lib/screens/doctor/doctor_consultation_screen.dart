@@ -85,10 +85,22 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
         _recordId = args['record_id'].toString();
       }
     }
-    if (_appointment == null && _standalonePatient == null && _recordId == null) return;
+    if (_appointment == null && _standalonePatient == null && _recordId == null) {
+      if (mounted) {
+        showErrorSnackBar(context, AppLocalizations.tr('consultation_not_available'));
+        Navigator.pop(context, false);
+      }
+      return;
+    }
+
+    if (mounted) setState(() {});
 
     await _refreshAppointmentFromServer();
+    if (mounted) setState(() {});
+
     await _ensureConsultationStarted();
+    if (mounted) setState(() {});
+
     if (_recordId != null || _appointment?.id != null || _appointment?.medicalRecordId != null) {
       await _loadExistingRecord();
     }
@@ -106,7 +118,15 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
       if (response is Map) {
         _appointment = Appointment.fromJson(Map<String, dynamic>.from(response));
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Consultation] Failed to start consultation: $e');
+      if (mounted) {
+        final msg = e.toString();
+        if (msg.toLowerCase().contains('payment')) {
+          showErrorSnackBar(context, AppLocalizations.tr('payment_required_consultation'));
+        }
+      }
+    }
   }
 
   Future<void> _refreshAppointmentFromServer() async {
@@ -116,7 +136,9 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
         await ApiService.instance.get('/appointments/${_appointment!.id}'),
       );
       _appointment = Appointment.fromJson(data);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[Consultation] Failed to refresh appointment: $e');
+    }
   }
 
   Future<void> _loadExistingRecord() async {

@@ -15,8 +15,16 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
     return false;
   }
 
-  return Navigator.of(context).pushNamed<bool>(
-    AppRoutes.doctorConsultation,
-    arguments: appointment,
-  );
+  try {
+    return await Navigator.of(context).pushNamed<bool>(
+      AppRoutes.doctorConsultation,
+      arguments: appointment,
+    );
+  } catch (e) {
+    debugPrint('[Consultation] Navigation error: $e');
+    if (context.mounted) {
+      showErrorSnackBar(context, AppLocalizations.tr('consultation_not_available'));
+    }
+    return false;
+  }
 }
