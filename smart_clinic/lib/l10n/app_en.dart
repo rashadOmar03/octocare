@@ -233,6 +233,7 @@ class AppStringsEn {
     'user_details': 'User Details',
     'delete_user_confirm': 'Permanently delete this user? This cannot be undone.',
     'cannot_delete_user': 'Cannot delete this user. Deactivate the account instead.',
+    'cannot_delete_self': 'You cannot delete or deactivate your own account.',
     'member_since': 'Member since',
     'completed_last_7_days': 'Completed (last 7 days)',
     'payment_details': 'Payment details',

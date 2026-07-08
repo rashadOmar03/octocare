@@ -8,6 +8,7 @@ from __future__ import annotations
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from cascade_delete import delete_appointments_cascade
 from models import (
     User,
     Profile,
@@ -111,25 +112,10 @@ def purge_all_patients(db: Session) -> dict[str, int]:
         db.flush()
 
         if apt_ids:
-            stats["appointment_reviews"] = (
-                db.query(AppointmentReview)
-                .filter(AppointmentReview.appointment_id.in_(apt_ids))
-                .delete(synchronize_session=False)
-            )
-            stats["payments"] = (
-                db.query(Payment)
-                .filter(Payment.appointment_id.in_(apt_ids))
-                .delete(synchronize_session=False)
-            )
-            # Safety: remove any records still pointing at these appointments.
-            db.query(MedicalRecord).filter(MedicalRecord.appointment_id.in_(apt_ids)).delete(
-                synchronize_session=False
-            )
-            stats["appointments"] = (
-                db.query(Appointment)
-                .filter(Appointment.id.in_(apt_ids))
-                .delete(synchronize_session=False)
-            )
+            apt_stats = delete_appointments_cascade(db, apt_ids)
+            stats["appointment_reviews"] = apt_stats["appointment_reviews"]
+            stats["payments"] = apt_stats["payments"]
+            stats["appointments"] = apt_stats["appointments"]
             db.flush()
 
         stats["profile_update_requests"] = (

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/api_config.dart';
 import '../../l10n/localization.dart';
 import '../../config/routes.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/admin_service.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/empty_state.dart';
@@ -84,6 +86,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> with SingleTickerPr
 
   String? _photoUrl(Map<String, dynamic> user) => _profileOf(user)?['photo_url']?.toString();
 
+  bool _isCurrentUser(Map<String, dynamic> user) {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    return auth.currentUser?.id == user['id'];
+  }
+
+  bool _canManageUser(Map<String, dynamic> user) => !_isCurrentUser(user);
+
   String _userSubtitle(Map<String, dynamic> user) {
     final email = (user['email'] ?? '').toString();
     if (user['role'] == 'doctor') {
@@ -94,8 +103,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> with SingleTickerPr
   }
 
   Future<void> _toggleStatus(Map<String, dynamic> user) async {
-    if (user['role'] == 'admin') {
-      if (mounted) showErrorSnackBar(context, AppLocalizations.tr('cannot_delete_user'));
+    if (!_canManageUser(user)) {
+      if (mounted) showErrorSnackBar(context, AppLocalizations.tr('cannot_delete_self'));
       return;
     }
     try {
@@ -113,8 +122,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> with SingleTickerPr
   }
 
   Future<void> _deleteUser(Map<String, dynamic> user) async {
-    if (user['role'] == 'admin') {
-      if (mounted) showErrorSnackBar(context, AppLocalizations.tr('cannot_delete_user'));
+    if (!_canManageUser(user)) {
+      if (mounted) showErrorSnackBar(context, AppLocalizations.tr('cannot_delete_self'));
       return;
     }
     final confirmed = await showDialog<bool>(
@@ -142,12 +151,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> with SingleTickerPr
         );
       }
     } catch (e) {
-      if (mounted) {
-        final msg = e.toString().contains('400') || e.toString().contains('Cannot delete')
-            ? AppLocalizations.tr('cannot_delete_user')
-            : e.toString();
-        showErrorSnackBar(context, msg);
-      }
+      if (mounted) showErrorSnackBar(context, e);
     }
   }
 
@@ -173,7 +177,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> with SingleTickerPr
     final name = _userName(user);
     final photoUrl = _photoUrl(user);
     final isActive = user['is_active'] == true;
-    final isAdmin = user['role'] == 'admin';
+    final canManage = _canManageUser(user);
 
     showModalBottomSheet(
       context: context,
@@ -250,7 +254,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> with SingleTickerPr
                   ),
                 ),
               ],
-              if (!isAdmin) ...[
+              if (canManage) ...[
                 const SizedBox(height: 24),
                 Row(
                   children: [
@@ -373,7 +377,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> with SingleTickerPr
                       _buildUserList(_patients),
                       _buildUserList(_doctors),
                       _buildUserList(_receptionists),
-                      _buildUserList(_admins, readOnly: true),
+                      _buildUserList(_admins),
                     ],
                   ),
                 ),
@@ -417,7 +421,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> with SingleTickerPr
                     label: isActive ? AppLocalizations.tr('active') : AppLocalizations.tr('deactivate'),
                     color: isActive ? const Color(0xFF388E3C) : const Color(0xFFD32F2F),
                   ),
-                  if (!readOnly)
+                  if (!readOnly && _canManageUser(u))
                     PopupMenuButton(
                       itemBuilder: (ctx) => [
                         if (u['role'] == 'patient')

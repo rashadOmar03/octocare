@@ -233,6 +233,7 @@ class AppStringsAr {
     'user_details': 'تفاصيل المستخدم',
     'delete_user_confirm': 'حذف هذا المستخدم نهائياً؟ لا يمكن التراجع.',
     'cannot_delete_user': 'لا يمكن حذف هذا المستخدم. استخدم إيقاف الحساب بدلاً من ذلك.',
+    'cannot_delete_self': 'لا يمكنك حذف حسابك أو إيقافه.',
     'member_since': 'عضو منذ',
     'completed_last_7_days': 'مكتمل (آخر 7 أيام)',
     'payment_details': 'تفاصيل الدفع',

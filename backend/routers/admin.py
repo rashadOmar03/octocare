@@ -26,6 +26,7 @@ from schemas import (
 from notification_helpers import notify_doctor, notify_user, notify_role_users
 from audit_service import log_audit
 from patient_purge import purge_all_patients
+from user_delete import delete_user_account
 from auth import hash_password, require_role, get_current_user
 
 router = APIRouter()
@@ -834,50 +835,37 @@ def delete_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.role == "admin":
-        raise HTTPException(status_code=400, detail="Cannot delete admin accounts")
 
     profile = db.query(Profile).filter(Profile.user_id == user_id).first()
     name = _display_name(profile, user.email)
     role = user.role
 
-    if user.role == "doctor" and profile:
-        doctor = db.query(Doctor).filter(Doctor.profile_id == profile.id).first()
-        if doctor:
-            apt_count = db.query(Appointment).filter(Appointment.doctor_id == doctor.id).count()
-            if apt_count > 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Cannot delete: doctor has {apt_count} appointment(s). Deactivate instead.",
-                )
-            db.query(DoctorSchedule).filter(DoctorSchedule.doctor_id == doctor.id).delete()
-            db.delete(doctor)
-
-    if user.role == "patient" and profile:
-        apt_count = db.query(Appointment).filter(Appointment.patient_id == profile.id).count()
-        if apt_count > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot delete: patient has {apt_count} appointment(s). Deactivate instead.",
+    try:
+        stats = delete_user_account(db, user)
+        log_audit(
+            db,
+            current_user.id,
+            "delete_user",
+            "user",
+            user_id,
+            f"Admin deleted {name} ({role}): {stats}",
+        )
+        try:
+            _notify_staff(
+                db,
+                "User deleted",
+                f"{name} ({role}) was permanently deleted by admin.",
+                exclude_user_id=current_user.id,
             )
-        db.query(SensorData).filter(SensorData.patient_id == profile.id).delete()
-        db.query(Document).filter(Document.patient_id == profile.id).delete()
-
-    db.query(Notification).filter(Notification.user_id == user_id).delete()
-    db.query(AIConversation).filter(AIConversation.user_id == user_id).delete()
-
-    if profile:
-        db.delete(profile)
-    db.delete(user)
-
-    _notify_staff(
-        db,
-        "User deleted",
-        f"{name} ({role}) was permanently deleted by admin.",
-        exclude_user_id=current_user.id,
-    )
-    db.commit()
-    return {"message": "User deleted"}
+        except Exception:
+            pass
+        db.commit()
+        return {"message": "User deleted", "stats": stats}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"User delete failed: {exc}") from exc
 
 
 @router.post("/purge-patients")
