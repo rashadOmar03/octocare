@@ -32,16 +32,19 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
     return AppLocalizations.tr('consultation_not_available');
   }
 
-  Future<Appointment> loadFromServer() async {
-    final raw = await ApiService.instance.get('/appointments/$appointmentId');
-    if (raw is! Map) {
-      throw ApiException('Unexpected appointment response.', 500);
-    }
-    return Appointment.fromJson(Map<String, dynamic>.from(raw));
+  Future<Appointment?> loadFromServer() async {
+    try {
+      final raw = await ApiService.instance.get('/appointments/$appointmentId');
+      if (raw is Map) {
+        return Appointment.fromJson(Map<String, dynamic>.from(raw));
+      }
+    } catch (_) {}
+    return null;
   }
 
   try {
-    var apt = await loadFromServer();
+    final serverApt = await loadFromServer();
+    final apt = serverApt ?? appointment;
 
     if (apt.status == 'completed' || apt.isConsultationEditOnly) {
       if (!apt.hasConsultation && apt.medicalRecordId == null) {
@@ -61,29 +64,36 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
       return false;
     }
 
-    final hasInProgressRecord =
-        apt.hasConsultation || apt.medicalRecordId != null;
+    final hasInProgressRecord = apt.hasConsultation || apt.medicalRecordId != null;
 
-    if (!hasInProgressRecord) {
-      try {
-        apt = await appointmentService.startConsultation(appointmentId);
-      } catch (startError) {
-        apt = await loadFromServer();
-        final canProceed = apt.isPaid && _isActiveVisitStatus(apt.status);
-        if (!canProceed) {
-          if (context.mounted) {
-            showErrorSnackBar(context, consultationErrorMessage(startError));
-          }
-          return false;
-        }
-      }
-    } else {
-      apt = await loadFromServer();
+    if (hasInProgressRecord) {
+      if (!context.mounted) return false;
+      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
     }
 
-    if (!context.mounted) return false;
-    return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
+    try {
+      final started = await appointmentService.startConsultation(appointmentId);
+      if (!context.mounted) return false;
+      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: started);
+    } catch (startError) {
+      final retryApt = await loadFromServer();
+      final latest = retryApt ?? apt;
+      final canProceed = latest.isPaid && _isActiveVisitStatus(latest.status);
+      if (!canProceed) {
+        if (context.mounted) {
+          showErrorSnackBar(context, consultationErrorMessage(startError));
+        }
+        return false;
+      }
+      if (!context.mounted) return false;
+      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: latest);
+    }
   } catch (e) {
+    final canFallback = appointment.isPaid && _isActiveVisitStatus(appointment.status);
+    if (canFallback) {
+      if (!context.mounted) return false;
+      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: appointment);
+    }
     if (context.mounted) {
       showErrorSnackBar(context, consultationErrorMessage(e));
     }
