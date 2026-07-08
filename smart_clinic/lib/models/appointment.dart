@@ -53,6 +53,18 @@ class Appointment {
   }
 
   factory Appointment.fromJson(Map<String, dynamic> json) {
+    bool parseBool(dynamic value) {
+      if (value == true || value == 1) return true;
+      if (value is String) {
+        final normalized = value.trim().toLowerCase();
+        return normalized == 'true' || normalized == '1';
+      }
+      return false;
+    }
+
+    final paymentStatus = json['payment_status']?.toString();
+    final isPaid = parseBool(json['is_paid']) || paymentStatus == 'paid';
+
     return Appointment(
       id: json['id']?.toString(),
       patientId: (json['patient_id'] ?? json['patient'])?.toString(),
@@ -66,9 +78,9 @@ class Appointment {
       notes: json['notes'],
       queueNumber: json['queue_number'] is int ? json['queue_number'] : int.tryParse(json['queue_number']?.toString() ?? ''),
       createdAt: json['created_at']?.toString(),
-      isPaid: json['is_paid'] == true || json['payment_status'] == 'paid',
-      paymentStatus: json['payment_status']?.toString(),
-      needsPayment: json['needs_payment'] == true || json['payment_status'] == 'refunded',
+      isPaid: isPaid,
+      paymentStatus: paymentStatus,
+      needsPayment: parseBool(json['needs_payment']) || paymentStatus == 'refunded',
       medicalRecordId: json['medical_record_id']?.toString(),
       hasConsultation: json['has_consultation'] == true || json['medical_record_id'] != null,
       patientPhotoUrl: json['patient_photo_url']?.toString(),

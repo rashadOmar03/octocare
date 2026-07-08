@@ -28,6 +28,9 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   bool _isLoading = true;
   String? _loadError;
 
+  bool _isActiveVisitStatus(String? status) =>
+      status == 'arrived' || status == 'confirmed' || status == 'pending';
+
   @override
   void initState() {
     super.initState();
@@ -122,7 +125,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
   }
 
   Widget _todayAppointmentCard(Appointment a) {
-    final canOpen = a.canDoctorStartConsultation || a.isConsultationEditOnly;
+    final canOpen = _isActiveVisitStatus(a.status) || a.isConsultationEditOnly || a.status == 'completed';
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -173,7 +176,7 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                   ),
                 ],
               ),
-              if (a.canDoctorStartConsultation) ...[
+              if (_isActiveVisitStatus(a.status) || a.isConsultationEditOnly || a.status == 'completed') ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -182,19 +185,11 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       final changed = await openDoctorConsultation(context, a);
                       if (changed == true && mounted) _loadData();
                     },
-                    child: Text(AppLocalizations.tr('start_consultation')),
-                  ),
-                ),
-              ] else if (a.isConsultationEditOnly) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      final changed = await openDoctorConsultation(context, a);
-                      if (changed == true && mounted) _loadData();
-                    },
-                    child: Text(AppLocalizations.tr('edit_consultation')),
+                    child: Text(
+                      a.isConsultationEditOnly || a.status == 'completed'
+                          ? AppLocalizations.tr('edit_consultation')
+                          : AppLocalizations.tr('start_consultation'),
+                    ),
                   ),
                 ),
               ] else ...[

@@ -14,7 +14,7 @@ Write-Host "Copying web build to backend/web for Railway..." -ForegroundColor Cy
 if (Test-Path $backendWeb) { Remove-Item $backendWeb -Recurse -Force }
 Copy-Item -Path (Join-Path (Join-Path (Get-Location) "build") "web") -Destination $backendWeb -Recurse
 
-'{"app_name":"Octocare Clinic","version":"1.0.0","build_number":"1","package_name":"smart_clinic"}' | Set-Content -Path (Join-Path $backendWeb "version.json") -Encoding UTF8
+'{"app_name":"Octocare Clinic","version":"1.0.1","build_number":"2","package_name":"smart_clinic"}' | Set-Content -Path (Join-Path $backendWeb "version.json") -Encoding UTF8
 
 Write-Host ""
 Write-Host "Done. Web output: smart_clinic/build/web" -ForegroundColor Green
