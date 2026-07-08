@@ -39,7 +39,8 @@ class Appointment {
     this.patientPhotoUrl,
   });
 
-  bool get isConsultationEditable => status == 'arrived' && isPaid;
+  bool get isConsultationEditable =>
+      isPaid && (status == 'arrived' || status == 'confirmed' || status == 'pending');
   bool get canDoctorStartConsultation =>
       isPaid && (status == 'arrived' || status == 'confirmed' || status == 'pending');
   bool get isConsultationEditOnly => status == 'completed' && (hasConsultation || medicalRecordId != null);

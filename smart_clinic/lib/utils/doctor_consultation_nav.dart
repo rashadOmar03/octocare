@@ -21,9 +21,6 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
     }
   }
 
-  bool isReadyForConsultation(Appointment apt) =>
-      apt.isConsultationEditable || (apt.status == 'arrived' && apt.isPaid);
-
   String consultationErrorMessage(Object error) {
     final text = error.toString().toLowerCase();
     if (text.contains('payment')) {
@@ -46,41 +43,45 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
       }
       return false;
     }
+    if (!context.mounted) return false;
     return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
   }
 
-  if (appointment.canDoctorStartConsultation) {
-    try {
-      var apt = await freshAppointment(appointment);
-      if (!isReadyForConsultation(apt) && apt.id != null) {
-        try {
-          apt = await appointmentService.startConsultation(apt.id!);
-        } catch (_) {
-          if (isReadyForConsultation(appointment)) {
+  if (!appointment.canDoctorStartConsultation) {
+    if (appointment.status == 'arrived' && !appointment.isPaid) {
+      showErrorSnackBar(context, AppLocalizations.tr('payment_required_consultation'));
+      return false;
+    }
+    if ((appointment.status == 'confirmed' || appointment.status == 'pending') && !appointment.isPaid) {
+      showErrorSnackBar(context, AppLocalizations.tr('payment_required_consultation'));
+      return false;
+    }
+    showErrorSnackBar(context, AppLocalizations.tr('consultation_not_available'));
+    return false;
+  }
+
+  try {
+    var apt = await freshAppointment(appointment);
+    if (apt.id != null && apt.status != 'completed' && apt.status != 'cancelled') {
+      try {
+        apt = await appointmentService.startConsultation(apt.id!);
+      } catch (startError) {
+        apt = await freshAppointment(appointment);
+        if (!apt.canDoctorStartConsultation) {
+          if (appointment.canDoctorStartConsultation) {
             apt = appointment;
-          } else if (!isReadyForConsultation(apt)) {
-            rethrow;
+          } else {
+            throw startError;
           }
         }
       }
-      if (!context.mounted) return false;
-      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
-    } catch (e) {
-      if (context.mounted) {
-        showErrorSnackBar(context, consultationErrorMessage(e));
-      }
-      return false;
     }
-  }
-
-  if (appointment.status == 'arrived' && !appointment.isPaid) {
-    showErrorSnackBar(context, AppLocalizations.tr('payment_required_consultation'));
+    if (!context.mounted) return false;
+    return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
+  } catch (e) {
+    if (context.mounted) {
+      showErrorSnackBar(context, consultationErrorMessage(e));
+    }
     return false;
   }
-  if ((appointment.status == 'confirmed' || appointment.status == 'pending') && !appointment.isPaid) {
-    showErrorSnackBar(context, AppLocalizations.tr('payment_required_consultation'));
-    return false;
-  }
-  showErrorSnackBar(context, AppLocalizations.tr('consultation_not_available'));
-  return false;
 }
