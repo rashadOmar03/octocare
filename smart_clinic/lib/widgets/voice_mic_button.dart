@@ -37,8 +37,7 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
     if (_voice.isRecording) {
       setState(() => _busy = true);
       try {
-    final lang = widget.languageOverride;
-        final text = await _voice.stopAndTranscribe(language: lang);
+        final text = await _voice.stopAndTranscribe(language: widget.languageOverride);
         if (widget.onAutoSend != null) {
           await widget.onAutoSend!(text);
         } else {

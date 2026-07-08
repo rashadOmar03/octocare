@@ -164,26 +164,6 @@ class _AiChatPanelState extends State<AiChatPanel> {
     }
   }
 
-  static final _arabicScript = RegExp(r'[\u0600-\u06FF]');
-
-  String? _voiceLanguage(BuildContext context) {
-    for (final m in _messages.reversed) {
-      if (m['role'] != 'user') continue;
-      final content = m['content'] ?? '';
-      final hasAr = _arabicScript.hasMatch(content);
-      final hasEn = RegExp(r'[A-Za-z]').hasMatch(content);
-      if (hasAr && !hasEn) return 'ar';
-      if (hasEn && !hasAr) return 'en';
-      if (hasAr && hasEn) {
-        final arCount = _arabicScript.allMatches(content).length;
-        final enCount = RegExp(r'[A-Za-z]').allMatches(content).length;
-        return arCount >= enCount ? 'ar' : 'en';
-      }
-      break;
-    }
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -253,7 +233,6 @@ class _AiChatPanelState extends State<AiChatPanel> {
             children: [
               VoiceMicButton(
                 controller: _messageController,
-                languageOverride: _voiceLanguage(context),
                 onAutoSend: _sendMessageWithText,
                 enabled: !_isLoading,
               ),
