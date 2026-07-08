@@ -6,9 +6,6 @@ import '../services/appointment_service.dart';
 import '../l10n/localization.dart';
 import 'ui_helpers.dart';
 
-bool _isActiveVisitStatus(String? status) =>
-    status == 'arrived' || status == 'confirmed' || status == 'pending';
-
 Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointment) async {
   final appointmentId = appointment.id;
   if (appointmentId == null || appointmentId.isEmpty) {
@@ -17,20 +14,6 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
   }
 
   final appointmentService = AppointmentService();
-
-  String consultationErrorMessage(Object error) {
-    if (error is ApiException && error.message.isNotEmpty) {
-      return error.message;
-    }
-    final text = error.toString().toLowerCase();
-    if (text.contains('payment')) {
-      return AppLocalizations.tr('payment_required_consultation');
-    }
-    if (text.contains('arrived') || text.contains('queue')) {
-      return AppLocalizations.tr('arrived_required_consultation');
-    }
-    return AppLocalizations.tr('consultation_not_available');
-  }
 
   Future<Appointment?> loadFromServer() async {
     try {
@@ -71,32 +54,18 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
       return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
     }
 
+    Appointment navigateWith = apt;
     try {
-      final started = await appointmentService.startConsultation(appointmentId);
-      if (!context.mounted) return false;
-      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: started);
-    } catch (startError) {
+      navigateWith = await appointmentService.startConsultation(appointmentId);
+    } catch (_) {
       final retryApt = await loadFromServer();
-      final latest = retryApt ?? apt;
-      final canProceed = latest.isPaid && _isActiveVisitStatus(latest.status);
-      if (!canProceed) {
-        if (context.mounted) {
-          showErrorSnackBar(context, consultationErrorMessage(startError));
-        }
-        return false;
-      }
-      if (!context.mounted) return false;
-      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: latest);
+      if (retryApt != null) navigateWith = retryApt;
     }
+
+    if (!context.mounted) return false;
+    return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: navigateWith);
   } catch (e) {
-    final canFallback = appointment.isPaid && _isActiveVisitStatus(appointment.status);
-    if (canFallback) {
-      if (!context.mounted) return false;
-      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: appointment);
-    }
-    if (context.mounted) {
-      showErrorSnackBar(context, consultationErrorMessage(e));
-    }
-    return false;
+    if (!context.mounted) return false;
+    return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: appointment);
   }
 }
