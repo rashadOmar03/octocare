@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../config/api_config.dart';
+import '../../config/sensor_colors.dart';
 import '../../l10n/localization.dart';
 import '../../services/api_service.dart';
 import '../../services/sensor_reading.dart';
@@ -18,8 +19,9 @@ class DoctorSensorScreen extends StatefulWidget {
 }
 
 class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
-  static const int _waveformCapacity = 600;
+  static const int _waveformCapacity = 500;
   static const Duration _uiRefreshInterval = Duration(milliseconds: 33);
+  static const Duration _dataSilenceTimeout = Duration(seconds: 3);
 
   final SensorService _sensorService = SensorService();
   final WifiSensorService _wifi = WifiSensorService.instance;
@@ -50,6 +52,8 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
   StreamSubscription<String>? _rawSub;
   StreamSubscription<bool>? _connectionSub;
   Timer? _noDataTimer;
+  Timer? _dataSilenceTimer;
+  DateTime? _lastDataReceivedAt;
   String? _lastRawLine;
   int _bytesReceived = 0;
   bool _isConnecting = false;
@@ -97,6 +101,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
   @override
   void dispose() {
     _noDataTimer?.cancel();
+    _dataSilenceTimer?.cancel();
     _uiRefreshTimer?.cancel();
     _readingSub?.cancel();
     _rawSub?.cancel();
@@ -168,10 +173,47 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
     }
   }
 
+  void _noteDataReceived() {
+    _lastDataReceivedAt = DateTime.now();
+  }
+
+  void _startDataSilenceWatchdog() {
+    _dataSilenceTimer?.cancel();
+    _lastDataReceivedAt = DateTime.now();
+    _dataSilenceTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_isConnected || !_isMeasuring) return;
+      final last = _lastDataReceivedAt;
+      if (last == null) return;
+      if (DateTime.now().difference(last) > _dataSilenceTimeout) {
+        unawaited(_handleSensorDataStopped());
+      }
+    });
+  }
+
+  void _stopDataSilenceWatchdog() {
+    _dataSilenceTimer?.cancel();
+    _dataSilenceTimer = null;
+    _lastDataReceivedAt = null;
+  }
+
+  Future<void> _handleSensorDataStopped() async {
+    if (!mounted || !_isConnected) return;
+    _stopDataSilenceWatchdog();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(AppLocalizations.tr('sensor_data_stopped')),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        duration: const Duration(seconds: 6),
+      ),
+    );
+    await _disconnectSensors();
+  }
+
   Future<void> _disconnectSensors() async {
     final session = ++_readingSession;
     _noDataTimer?.cancel();
     _noDataTimer = null;
+    _stopDataSilenceWatchdog();
     _uiRefreshTimer?.cancel();
     _uiRefreshTimer = null;
     _needsUiRefresh = false;
@@ -204,6 +246,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
     _uiRefreshTimer?.cancel();
     _uiRefreshTimer = null;
     _needsUiRefresh = false;
+    _stopDataSilenceWatchdog();
     setState(() {
       _isConnected = false;
       _isMeasuring = false;
@@ -283,6 +326,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
       );
       _rawSub = _wifi.rawLines.listen((line) {
         if (!mounted || session != _readingSession) return;
+        _noteDataReceived();
         _lastRawLine = line;
         _bytesReceived = _wifi.bytesReceived;
         _scheduleUiRefresh();
@@ -310,6 +354,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
           _bytesReceived = 0;
           _clearReadings();
         });
+        _startDataSilenceWatchdog();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppLocalizations.tr('connected')), backgroundColor: const Color(0xFF388E3C)),
         );
@@ -337,6 +382,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
   void _onSensorReading(SensorReading reading) {
     if (!_isConnected || !_isMeasuring) return;
 
+    _noteDataReceived();
     _sensorAttached = reading.attached;
 
     if (!reading.attached) {
@@ -398,12 +444,14 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
       _bpmSamples.clear();
       _tempSamples.clear();
     });
+    _startDataSilenceWatchdog();
     _flushUiRefresh();
   }
 
   void _stopMeasuring() {
     if (!_isConnected) return;
     setState(() => _isMeasuring = false);
+    _stopDataSilenceWatchdog();
     _flushUiRefresh();
   }
 
@@ -645,7 +693,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                           _heartRate,
                           AppLocalizations.tr('bpm'),
                           Icons.favorite,
-                          const Color(0xFFD32F2F),
+                          SensorPlotterColors.bpm,
                         ),
                         const SizedBox(width: 8),
                         _buildVitalCard(
@@ -653,7 +701,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                           _temperature,
                           '°C',
                           Icons.thermostat,
-                          const Color(0xFFF57C00),
+                          SensorPlotterColors.temp,
                         ),
                         const SizedBox(width: 8),
                         _buildVitalCard(
@@ -661,7 +709,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                           _gsr,
                           '',
                           Icons.bolt,
-                          const Color(0xFF6A1B9A),
+                          SensorPlotterColors.gsr,
                         ),
                         const SizedBox(width: 8),
                         _buildVitalCard(
@@ -669,7 +717,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                           _ecg,
                           '',
                           Icons.monitor_heart_outlined,
-                          const Color(0xFFC62828),
+                          SensorPlotterColors.ecg,
                         ),
                         const SizedBox(width: 8),
                         _buildVitalCard(
@@ -677,7 +725,7 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                           _emg,
                           '',
                           Icons.fitness_center,
-                          const Color(0xFF00838F),
+                          SensorPlotterColors.emg,
                         ),
                       ],
                     ),
@@ -690,8 +738,9 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                     shortLabel: 'ECG',
                     samples: _ecgSamples,
                     currentValue: _ecg ?? (_ecgSamples.isNotEmpty ? _ecgSamples.last : null),
-                    color: const Color(0xFF42A5F5),
-                    height: 150,
+                    color: SensorPlotterColors.ecg,
+                    height: 140,
+                    maxSamples: _waveformCapacity,
                   ),
                   const SizedBox(height: 8),
                   SensorWaveformChart(
@@ -699,8 +748,9 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                     shortLabel: 'EMG',
                     samples: _emgSamples,
                     currentValue: _emg ?? (_emgSamples.isNotEmpty ? _emgSamples.last : null),
-                    color: const Color(0xFFEF5350),
-                    height: 150,
+                    color: SensorPlotterColors.emg,
+                    height: 140,
+                    maxSamples: _waveformCapacity,
                   ),
                   const SizedBox(height: 8),
                   SensorWaveformChart(
@@ -708,8 +758,31 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                     shortLabel: 'GSR',
                     samples: _gsrSamples,
                     currentValue: _gsr,
-                    color: const Color(0xFF66BB6A),
-                    height: 150,
+                    color: SensorPlotterColors.gsr,
+                    height: 140,
+                    maxSamples: _waveformCapacity,
+                  ),
+                  const SizedBox(height: 8),
+                  SensorWaveformChart(
+                    title: AppLocalizations.tr('heart_rate'),
+                    shortLabel: 'BPM',
+                    samples: _bpmSamples,
+                    currentValue: _heartRate,
+                    unit: AppLocalizations.tr('bpm'),
+                    color: SensorPlotterColors.bpm,
+                    height: 120,
+                    maxSamples: _waveformCapacity,
+                  ),
+                  const SizedBox(height: 8),
+                  SensorWaveformChart(
+                    title: AppLocalizations.tr('temperature'),
+                    shortLabel: 'Temp',
+                    samples: _tempSamples,
+                    currentValue: _temperature,
+                    unit: '°C',
+                    color: SensorPlotterColors.temp,
+                    height: 120,
+                    maxSamples: _waveformCapacity,
                   ),
                   const SizedBox(height: 24),
                   Row(
@@ -765,7 +838,10 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
               child: Text(
                 value != null ? value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1) : '--',
                 key: ValueKey(value),
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
               ),
             ),
             if (unit.isNotEmpty)

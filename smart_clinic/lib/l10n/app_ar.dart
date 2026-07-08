@@ -373,6 +373,7 @@ class AppStringsAr {
     'wifi_cloud_hint': 'وضع السحابة: ESP32 يرسل البيانات للسيرفر. الهاتف يمكنه استخدام بيانات الجوال — لا حاجة لـ IP الـ ESP32. شغّل hotspot الأوبو ليتصل ESP32 بالإنترنت.',
     'wifi_no_data_hint': 'لا توجد بيانات من ESP32 بعد. تحقق من الطاقة وUART واتصال WiFi في Serial Monitor.',
     'wifi_disconnected': 'انقطع اتصال ESP32 WiFi. اضغط إعادة الاتصال أو Connect.',
+    'sensor_data_stopped': 'توقف المستشعر عن إرسال البيانات. تم قطع الاتصال.',
     'esp32_ip_label': 'عنوان IP للـ ESP32',
     'esp32_port_label': 'منفذ TCP',
     'esp32_ip_required': 'أدخل IP الـ ESP32 الظاهر في Serial Monitor بعد WiFi Connected.',

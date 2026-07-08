@@ -1,6 +1,8 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../config/sensor_colors.dart';
+
 class SensorWaveformChart extends StatelessWidget {
   const SensorWaveformChart({
     super.key,
@@ -12,6 +14,9 @@ class SensorWaveformChart extends StatelessWidget {
     this.shortLabel,
     this.height = 150,
     this.plotterStyle = true,
+    this.maxSamples = 500,
+    this.fixedMinY,
+    this.fixedMaxY,
   });
 
   final String title;
@@ -22,6 +27,9 @@ class SensorWaveformChart extends StatelessWidget {
   final String? shortLabel;
   final double height;
   final bool plotterStyle;
+  final int maxSamples;
+  final double? fixedMinY;
+  final double? fixedMaxY;
 
   String get _label => shortLabel ?? title;
 
@@ -40,13 +48,9 @@ class SensorWaveformChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final plotBg = plotterStyle ? const Color(0xFF252526) : Theme.of(context).colorScheme.surfaceContainerHighest;
-    final gridColor = plotterStyle
-        ? const Color(0xFF3E3E42)
-        : Theme.of(context).colorScheme.outline.withValues(alpha: 0.25);
-    final axisColor = plotterStyle
-        ? const Color(0xFFCCCCCC)
-        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65);
+    final plotBg = plotterStyle ? SensorPlotterColors.plotBackground : Theme.of(context).colorScheme.surfaceContainerHighest;
+    final gridColor = plotterStyle ? SensorPlotterColors.plotGrid : Theme.of(context).colorScheme.outline.withValues(alpha: 0.25);
+    final axisColor = plotterStyle ? SensorPlotterColors.plotAxis : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -65,7 +69,10 @@ class SensorWaveformChart extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   _label,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
                 ),
                 const Spacer(),
                 Text(
@@ -88,7 +95,7 @@ class SensorWaveformChart extends StatelessWidget {
               height: height,
               decoration: BoxDecoration(
                 color: plotBg,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: gridColor),
               ),
               child: samples.length < 2
@@ -105,14 +112,14 @@ class SensorWaveformChart extends StatelessWidget {
                       child: LineChart(
                         LineChartData(
                           minX: 0,
-                          maxX: (samples.length - 1).toDouble(),
+                          maxX: (maxSamples - 1).toDouble(),
                           minY: _minY,
                           maxY: _maxY,
                           clipData: const FlClipData.all(),
                           gridData: FlGridData(
                             show: true,
                             drawVerticalLine: true,
-                            verticalInterval: _verticalInterval,
+                            verticalInterval: maxSamples / 4,
                             horizontalInterval: _gridInterval,
                             getDrawingHorizontalLine: (_) => FlLine(color: gridColor, strokeWidth: 0.8),
                             getDrawingVerticalLine: (_) => FlLine(color: gridColor.withValues(alpha: 0.55), strokeWidth: 0.6),
@@ -120,11 +127,31 @@ class SensorWaveformChart extends StatelessWidget {
                           titlesData: FlTitlesData(
                             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                             rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: plotterStyle,
+                                reservedSize: plotterStyle ? 22 : 0,
+                                interval: maxSamples / 4,
+                                getTitlesWidget: (value, meta) {
+                                  if (!plotterStyle) return const SizedBox.shrink();
+                                  final rounded = value.round();
+                                  if (rounded % (maxSamples ~/ 4) != 0 && rounded != 0) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Text(
+                                    '$rounded',
+                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                          color: axisColor,
+                                          fontSize: 10,
+                                        ),
+                                  );
+                                },
+                              ),
+                            ),
                             leftTitles: AxisTitles(
                               sideTitles: SideTitles(
                                 showTitles: true,
-                                reservedSize: 40,
+                                reservedSize: 44,
                                 interval: _gridInterval,
                                 getTitlesWidget: (value, meta) => Text(
                                   _formatAxis(value),
@@ -136,18 +163,18 @@ class SensorWaveformChart extends StatelessWidget {
                               ),
                             ),
                           ),
-                          borderData: FlBorderData(show: false),
+                          borderData: FlBorderData(
+                            show: plotterStyle,
+                            border: Border.all(color: gridColor.withValues(alpha: 0.8)),
+                          ),
                           lineTouchData: const LineTouchData(enabled: false),
                           lineBarsData: [
                             LineChartBarData(
-                              spots: List.generate(
-                                samples.length,
-                                (i) => FlSpot(i.toDouble(), samples[i]),
-                              ),
+                              spots: _spots,
                               isCurved: false,
                               isStepLineChart: false,
                               color: color,
-                              barWidth: 1.4,
+                              barWidth: 1.6,
                               dotData: const FlDotData(show: false),
                             ),
                           ],
@@ -162,6 +189,17 @@ class SensorWaveformChart extends StatelessWidget {
     );
   }
 
+  List<FlSpot> get _spots {
+    if (samples.isEmpty) return [];
+    final startIndex = samples.length > maxSamples ? samples.length - maxSamples : 0;
+    final visible = samples.sublist(startIndex);
+    final offset = (maxSamples - visible.length).clamp(0, maxSamples);
+    return List.generate(
+      visible.length,
+      (i) => FlSpot((offset + i).toDouble(), visible[i]),
+    );
+  }
+
   String _formatAxis(double value) {
     if (value.abs() >= 100) return value.round().toString();
     if (value == value.roundToDouble()) return value.round().toString();
@@ -169,18 +207,20 @@ class SensorWaveformChart extends StatelessWidget {
   }
 
   double get _minY {
+    if (fixedMinY != null && fixedMaxY != null) return fixedMinY!;
     var minY = samples.reduce((a, b) => a < b ? a : b);
     var maxY = samples.reduce((a, b) => a > b ? a : b);
     if (minY == maxY) return minY - 1;
-    final pad = (maxY - minY) * 0.08;
-    return minY - pad;
+    final pad = (maxY - minY) * 0.05;
+    return (minY - pad).clamp(fixedMinY ?? double.negativeInfinity, double.infinity);
   }
 
   double get _maxY {
+    if (fixedMinY != null && fixedMaxY != null) return fixedMaxY!;
     var minY = samples.reduce((a, b) => a < b ? a : b);
     var maxY = samples.reduce((a, b) => a > b ? a : b);
     if (minY == maxY) return maxY + 1;
-    final pad = (maxY - minY) * 0.08;
+    final pad = (maxY - minY) * 0.05;
     return maxY + pad;
   }
 
@@ -193,12 +233,5 @@ class SensorWaveformChart extends StatelessWidget {
     if (span <= 500) return 100;
     if (span <= 1000) return 200;
     return span / 5;
-  }
-
-  double get _verticalInterval {
-    if (samples.length <= 60) return 10;
-    if (samples.length <= 150) return 25;
-    if (samples.length <= 300) return 50;
-    return 80;
   }
 }

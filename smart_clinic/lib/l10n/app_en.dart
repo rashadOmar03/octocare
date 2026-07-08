@@ -373,6 +373,7 @@ class AppStringsEn {
     'wifi_cloud_hint': 'Cloud mode: ESP32 sends data to the online server. Your phone can use mobile data — no ESP32 IP needed. Turn on the Oppo hotspot so the ESP32 has internet.',
     'wifi_no_data_hint': 'No data from ESP32 yet. Check Arduino + ESP32 power, UART wiring, and that WiFi connected on ESP32 Serial Monitor.',
     'wifi_disconnected': 'ESP32 WiFi link lost. Tap Reconnect or Connect again.',
+    'sensor_data_stopped': 'Sensor stopped sending data. Disconnected.',
     'esp32_ip_label': 'ESP32 IP address',
     'esp32_port_label': 'TCP port',
     'esp32_ip_required': 'Enter the ESP32 IP address shown in its Serial Monitor after WiFi Connected.',
