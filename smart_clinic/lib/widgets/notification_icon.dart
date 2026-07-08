@@ -22,7 +22,7 @@ class NotificationIconState extends State<NotificationIcon> {
 
   Future<void> _fetchCount() async {
     try {
-      final response = await ApiService.instance.get('/patients/notifications');
+      final response = await ApiService.instance.get('/notifications');
       final List<dynamic> data = response is List ? response : (response['results'] ?? []);
       final count = data.where((n) => n['is_read'] != true).length;
       if (mounted) setState(() => _unreadCount = count);

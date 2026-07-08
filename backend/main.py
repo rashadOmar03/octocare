@@ -32,6 +32,7 @@ from routers.admin import router as admin_router
 from routers.receptionist import router as receptionist_router
 from routers.doctors import router as doctors_router
 from routers.reviews import router as reviews_router
+from routers.notifications_router import router as notifications_router
 
 app = FastAPI(title="Octocare Clinic Management System", version="1.0.0")
 
@@ -56,6 +57,7 @@ app.include_router(admin_router, prefix="/admin", tags=["Admin"])
 app.include_router(receptionist_router, prefix="/receptionist", tags=["Receptionist"])
 app.include_router(doctors_router, prefix="/doctors", tags=["Doctors"])
 app.include_router(reviews_router, prefix="/reviews", tags=["Reviews"])
+app.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 
 
 @app.on_event("startup")

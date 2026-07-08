@@ -4,6 +4,7 @@ import '../../services/api_service.dart';
 import '../../models/notification_model.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/loading_widget.dart';
+import '../../utils/time_format.dart';
 import '../../utils/ui_helpers.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -30,7 +31,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _loadError = null;
     });
     try {
-      final response = await ApiService.instance.get('/patients/notifications');
+      final response = await ApiService.instance.get('/notifications');
       final List<dynamic> data = response is List ? response : (response['results'] ?? []);
       _notifications = data.map((e) => NotificationModel.fromJson(Map<String, dynamic>.from(e))).toList();
     } catch (e) {
@@ -42,7 +43,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _markAsRead(String id) async {
     try {
-      await ApiService.instance.put('/patients/notifications/$id/read', {});
+      await ApiService.instance.put('/notifications/$id/read', {});
       await _loadNotifications();
     } catch (e) {
       if (mounted) {
@@ -59,7 +60,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _deleteNotification(String id) async {
     try {
-      await ApiService.instance.delete('/patients/notifications/$id');
+      await ApiService.instance.delete('/notifications/$id');
       await _loadNotifications();
     } catch (e) {
       if (mounted) {
@@ -174,7 +175,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 Text(n.message ?? ''),
                                 const SizedBox(height: 4),
                                 Text(
-                                  n.createdAt ?? '',
+                                  TimeFormat.formatChatTimestamp(n.createdAt),
                                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                                   ),

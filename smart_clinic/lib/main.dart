@@ -40,6 +40,7 @@ import 'screens/doctor/doctor_ai_screen.dart';
 import 'screens/doctor/doctor_create_record_screen.dart';
 import 'screens/doctor/doctor_create_prescription_screen.dart';
 import 'screens/doctor/doctor_profile_screen.dart';
+import 'screens/doctor/doctor_vacation_screen.dart';
 import 'screens/doctor/doctor_reports_screen.dart';
 import 'screens/doctor/doctor_sensor_screen.dart';
 
@@ -183,6 +184,7 @@ class OctocareClinicApp extends StatelessWidget {
           AppRoutes.doctorPrescriptionDetail: (_) => const RoleGuard(requiredRole: 'doctor', child: PrescriptionDetailScreen()),
           AppRoutes.doctorRecordDetail: (_) => const RoleGuard(requiredRole: 'doctor', child: RecordDetailScreen()),
           AppRoutes.doctorProfile: (_) => const RoleGuard(requiredRole: 'doctor', child: DoctorProfileScreen()),
+          AppRoutes.doctorVacation: (_) => const RoleGuard(requiredRole: 'doctor', child: DoctorVacationScreen()),
           AppRoutes.doctorNotifications: (_) => const RoleGuard(requiredRole: 'doctor', child: NotificationsScreen()),
           AppRoutes.doctorSensors: (_) => const RoleGuard(requiredRole: 'doctor', child: DoctorSensorScreen()),
           AppRoutes.doctorReports: (_) => const RoleGuard(requiredRole: 'doctor', child: DoctorReportsScreen()),

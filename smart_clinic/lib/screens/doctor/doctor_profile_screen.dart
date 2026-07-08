@@ -186,6 +186,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 Card(
                   child: Column(
                     children: [
+                      ListTile(
+                        leading: const Icon(Icons.beach_access_outlined),
+                        title: Text(AppLocalizations.tr('time_off')),
+                        subtitle: Text(AppLocalizations.tr('add_time_off')),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.pushNamed(context, AppRoutes.doctorVacation),
+                      ),
+                      const Divider(height: 1),
                       ListTile(leading: const Icon(Icons.email), title: Text(AppLocalizations.tr('email')), subtitle: Text(_profileData['email']?.toString() ?? user?.email ?? '-')),
                       if (_isEditing)
                         Padding(

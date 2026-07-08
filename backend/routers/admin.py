@@ -358,36 +358,17 @@ def add_doctor_time_off(
     db.add(row)
 
     doc_name = _doctor_display_name(db, doctor)
-    reason = data.reason or "vacation"
-    notify_doctor(
+    from vacation_helpers import notify_vacation_scheduled
+
+    patient_notified = notify_vacation_scheduled(
         db,
         doctor_id,
-        "Time off scheduled",
-        f"Admin scheduled time off ({data.start_date} to {data.end_date}): {reason}.",
+        data.start_date,
+        data.end_date,
+        data.reason,
+        scheduled_by="admin",
+        exclude_user_id=current_user.id,
     )
-
-    affected = (
-        db.query(Appointment)
-        .filter(
-            Appointment.doctor_id == doctor_id,
-            Appointment.date >= data.start_date,
-            Appointment.date <= data.end_date,
-            Appointment.status.in_(["pending", "confirmed", "arrived"]),
-        )
-        .all()
-    )
-    for apt in affected:
-        patient = db.query(Profile).filter(Profile.id == apt.patient_id).first()
-        if patient:
-            notify_user(
-                db,
-                patient.user_id,
-                "Doctor unavailable",
-                (
-                    f"{doc_name} is not available on {apt.date}. "
-                    f"Please reschedule your appointment ({apt.time_slot})."
-                ),
-            )
 
     log_audit(
         db,
@@ -395,7 +376,7 @@ def add_doctor_time_off(
         "add_doctor_time_off",
         "doctor",
         doctor_id,
-        f"Time off {data.start_date}–{data.end_date} for {doc_name}",
+        f"Time off {data.start_date}–{data.end_date} for {doc_name} ({patient_notified} patients notified)",
     )
     db.commit()
     db.refresh(row)
@@ -416,8 +397,19 @@ def delete_doctor_time_off(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Time off not found")
+    start_date = row.start_date
+    end_date = row.end_date
     db.delete(row)
-    notify_doctor(db, doctor_id, "Time off removed", "Admin removed a scheduled time-off period.")
+    from vacation_helpers import notify_vacation_removed
+
+    notify_vacation_removed(
+        db,
+        doctor_id,
+        start_date=start_date,
+        end_date=end_date,
+        removed_by="admin",
+        exclude_user_id=current_user.id,
+    )
     db.commit()
     return {"message": "Time off removed"}
 

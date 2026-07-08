@@ -285,6 +285,11 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
         'end_date': endStr,
         'reason': reason.isEmpty ? null : reason,
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.tr('settings_saved')), backgroundColor: const Color(0xFF388E3C)),
+        );
+      }
       await _loadDetail(_selectedDoctorId!);
     } catch (e) {
       if (mounted) {
