@@ -511,6 +511,7 @@ def _empty_slots_response(
 def available_slots(
     doctor_id: str = Query(...),
     slot_date: date = Query(..., alias="date"),
+    exclude_appointment_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     auto_cancel_expired_appointments(db)
@@ -543,7 +544,7 @@ def available_slots(
 
     free = [
         s for s in all_slots
-        if is_slot_available(db, doctor_id, slot_date, s)
+        if is_slot_available(db, doctor_id, slot_date, s, exclude_appointment_id=exclude_appointment_id)
     ]
     if not free and all_slots:
         return _empty_slots_response(db, settings, reason="all_slots_booked")
@@ -1037,29 +1038,28 @@ def receptionist_reschedule(
     if data.date < date.today():
         raise HTTPException(status_code=400, detail="Cannot reschedule to a past date")
 
+    validate_booking_date(data.date, "receptionist", db)
+
     doctor = db.query(Doctor).filter(Doctor.id == target_doctor_id).first()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    day_of_week = data.date.weekday()
-    schedule = (
-        db.query(DoctorSchedule)
-        .filter(
-            DoctorSchedule.doctor_id == target_doctor_id,
-            DoctorSchedule.day_of_week == day_of_week,
-            DoctorSchedule.is_available == True,
-        )
-        .first()
-    )
-    if not schedule:
-        raise HTTPException(status_code=400, detail="Doctor is not available on this day")
-
-    from clinic_schedule import is_doctor_on_vacation
-
-    if is_doctor_on_vacation(db, target_doctor_id, data.date):
-        raise HTTPException(status_code=400, detail="Doctor is on vacation on the selected date")
+    validate_booking_date(data.date, "receptionist", db)
 
     settings = db.query(ClinicSettings).first()
+    schedule, block_reason = resolve_doctor_schedule_for_date(db, target_doctor_id, data.date, settings)
+    if block_reason == "vacation":
+        raise HTTPException(status_code=400, detail="Doctor is on vacation on the selected date")
+    if block_reason == "clinic_closed":
+        from clinic_schedule import working_days_label
+        label = working_days_label(settings.working_days if settings else None)
+        raise HTTPException(
+            status_code=400,
+            detail=f"The clinic is closed on this day. Working days: {label}.",
+        )
+    if block_reason or not schedule:
+        raise HTTPException(status_code=400, detail="Doctor is not available on this day")
+
     duration = settings.appointment_duration if settings else 30
     available = _generate_slots(schedule.start_time, schedule.end_time, duration)
     if data.time_slot not in available:

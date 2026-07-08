@@ -38,6 +38,7 @@ class _PatientRescheduleDialogState extends State<PatientRescheduleDialog> {
       }
     }
     _selectedDate ??= DateTime.now().add(const Duration(days: 1));
+    _selectedTime = widget.appointment.timeSlot;
     _loadSlots();
   }
 
@@ -47,12 +48,18 @@ class _PatientRescheduleDialogState extends State<PatientRescheduleDialog> {
     try {
       final dateStr =
           '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}';
-      _slots = await _service.getAvailableSlots(widget.appointment.doctorId!, dateStr);
+      final result = await _service.fetchAvailableSlots(
+        widget.appointment.doctorId!,
+        dateStr,
+        excludeAppointmentId: widget.appointment.id,
+      );
+      _slots = (result['slots'] as List?)?.cast<Map<String, dynamic>>() ?? [];
       if (_selectedTime != null && !_slots.any((s) => s['time'] == _selectedTime)) {
-        _selectedTime = null;
+        _selectedTime = _slots.isNotEmpty ? _slots.first['time']?.toString() : null;
       }
     } catch (_) {
       _slots = [];
+      _selectedTime = null;
     }
     setState(() => _loadingSlots = false);
   }

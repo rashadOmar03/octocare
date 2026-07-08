@@ -175,7 +175,7 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
                 'day_of_week': day,
                 'start_time': _dayStart[day]?.text.trim() ?? _startHourController.text.trim(),
                 'end_time': _dayEnd[day]?.text.trim() ?? _endHourController.text.trim(),
-                'is_available': _clinicWorkingDays.contains(day) && _dayAvailable[day] == true,
+                'is_available': _dayAvailable[day] == true,
               })
           .toList();
       _detail = await _service.updateDoctorSchedule(_selectedDoctorId!, {
@@ -397,16 +397,16 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(_dayLabel(day)),
-                      subtitle: clinicOpen
-                          ? null
-                          : Text(
-                              AppLocalizations.tr('clinic_closed_day'),
+                      subtitle: !clinicOpen
+                          ? Text(
+                              AppLocalizations.tr('doctor_day_will_open_clinic'),
                               style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                      value: clinicOpen && _dayAvailable[day] == true,
-                      onChanged: clinicOpen ? (v) => setState(() => _dayAvailable[day] = v) : null,
+                            )
+                          : null,
+                      value: _dayAvailable[day] == true,
+                      onChanged: (v) => setState(() => _dayAvailable[day] = v),
                     ),
-                    if (clinicOpen && _dayAvailable[day] == true)
+                    if (_dayAvailable[day] == true)
                       Row(
                         children: [
                           Expanded(child: TimePickerField(controller: _dayStart[day]!, label: AppLocalizations.tr('working_hours'))),

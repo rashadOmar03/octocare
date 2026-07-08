@@ -312,6 +312,7 @@ class AppStringsEn {
     'vacation_reason': 'Reason (optional)',
     'doctor_on_vacation': 'This doctor is on vacation on the selected date',
     'doctor_day_off': 'This doctor is not working on the selected day. Please choose another date.',
+    'doctor_day_will_open_clinic': 'Saving will also add this day to clinic working days.',
     'all_slots_booked': 'All time slots are booked for this day. Please choose another date.',
     'hours_24_hint': 'Use 24-hour format (e.g. 16:30 for 4:30 PM)',
     'invalid_time': 'Enter time as HH:MM in 24-hour format',

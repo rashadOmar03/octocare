@@ -117,8 +117,16 @@ class ReceptionistService {
     return slots.map((e) => e.toString()).toList();
   }
 
-  Future<Map<String, dynamic>> fetchAvailableSlotsMeta(String doctorId, String date) async {
-    final response = await _api.get('/receptionist/available-slots?doctor_id=$doctorId&date=$date');
+  Future<Map<String, dynamic>> fetchAvailableSlotsMeta(
+    String doctorId,
+    String date, {
+    String? excludeAppointmentId,
+  }) async {
+    var endpoint = '/receptionist/available-slots?doctor_id=$doctorId&date=$date';
+    if (excludeAppointmentId != null && excludeAppointmentId.isNotEmpty) {
+      endpoint += '&exclude_appointment_id=$excludeAppointmentId';
+    }
+    final response = await _api.get(endpoint);
     if (response is List) {
       return {'slots': response.map((e) => e.toString()).toList(), 'reason': null};
     }

@@ -58,13 +58,29 @@ class AppointmentService {
     await _api.put('/appointments/$id/complete', {});
   }
 
-  Future<List<Map<String, dynamic>>> getAvailableSlots(String doctorId, String date) async {
-    final result = await fetchAvailableSlots(doctorId, date);
+  Future<List<Map<String, dynamic>>> getAvailableSlots(
+    String doctorId,
+    String date, {
+    String? excludeAppointmentId,
+  }) async {
+    final result = await fetchAvailableSlots(
+      doctorId,
+      date,
+      excludeAppointmentId: excludeAppointmentId,
+    );
     return result['slots'] as List<Map<String, dynamic>>;
   }
 
-  Future<Map<String, dynamic>> fetchAvailableSlots(String doctorId, String date) async {
-    final response = await _api.get('/appointments/available-slots?doctor_id=$doctorId&date=$date');
+  Future<Map<String, dynamic>> fetchAvailableSlots(
+    String doctorId,
+    String date, {
+    String? excludeAppointmentId,
+  }) async {
+    var endpoint = '/appointments/available-slots?doctor_id=$doctorId&date=$date';
+    if (excludeAppointmentId != null && excludeAppointmentId.isNotEmpty) {
+      endpoint += '&exclude_appointment_id=$excludeAppointmentId';
+    }
+    final response = await _api.get(endpoint);
     if (response is List) {
       return {
         'slots': List<Map<String, dynamic>>.from(

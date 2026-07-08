@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../l10n/localization.dart';
 import '../models/appointment.dart';
-import '../services/api_service.dart';
 import '../services/appointment_service.dart';
+import '../services/receptionist_service.dart';
 import '../utils/time_format.dart';
 
 class ReceptionistRescheduleDialog extends StatefulWidget {
@@ -39,9 +39,13 @@ class ReceptionistRescheduleDialog extends StatefulWidget {
 
 class _ReceptionistRescheduleDialogState extends State<ReceptionistRescheduleDialog> {
   final AppointmentService _service = AppointmentService();
+  final ReceptionistService _receptionistService = ReceptionistService();
   DateTime? _selectedDate;
   String? _selectedTime;
   List<String> _slots = [];
+  String? _slotsReason;
+  String? _slotsDaysLabel;
+  String? _vacationReason;
   bool _confirm = true;
   bool _loading = false;
   bool _loadingSlots = false;
@@ -57,6 +61,7 @@ class _ReceptionistRescheduleDialogState extends State<ReceptionistRescheduleDia
       }
     }
     _selectedDate ??= DateTime.now();
+    _selectedTime = widget.appointment.timeSlot;
     _loadSlots();
   }
 
@@ -66,16 +71,24 @@ class _ReceptionistRescheduleDialogState extends State<ReceptionistRescheduleDia
     try {
       final dateStr =
           '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}';
-      final response = await ApiService.instance.get(
-        '/receptionist/available-slots?doctor_id=${widget.appointment.doctorId}&date=$dateStr',
+      final result = await _receptionistService.fetchAvailableSlotsMeta(
+        widget.appointment.doctorId!,
+        dateStr,
+        excludeAppointmentId: widget.appointment.id,
       );
-      final slots = response is Map ? (response['slots'] as List? ?? []) : [];
-      _slots = slots.map((e) => e.toString()).toList();
+      _slots = List<String>.from(result['slots'] as List? ?? []);
+      _slotsReason = result['reason']?.toString();
+      _slotsDaysLabel = result['working_days_label']?.toString();
+      _vacationReason = result['vacation_reason']?.toString();
       if (_selectedTime != null && !_slots.contains(_selectedTime)) {
-        _selectedTime = null;
+        _selectedTime = _slots.isNotEmpty ? _slots.first : null;
       }
     } catch (_) {
       _slots = [];
+      _slotsReason = null;
+      _slotsDaysLabel = null;
+      _vacationReason = null;
+      _selectedTime = null;
     }
     setState(() => _loadingSlots = false);
   }
@@ -91,6 +104,25 @@ class _ReceptionistRescheduleDialogState extends State<ReceptionistRescheduleDia
       setState(() => _selectedDate = picked);
       await _loadSlots();
     }
+  }
+
+  String? _emptySlotsMessage() {
+    if (_slots.isNotEmpty) return null;
+    final reason = _slotsReason;
+    final daysLabel = _slotsDaysLabel ?? '';
+    if (reason == 'vacation') {
+      return _vacationReason?.isNotEmpty == true
+          ? '${AppLocalizations.tr('doctor_on_vacation')}: $_vacationReason'
+          : AppLocalizations.tr('doctor_on_vacation');
+    }
+    if (reason == 'clinic_closed') return AppLocalizations.tr('clinic_closed_day');
+    if (reason == 'doctor_day_off') return AppLocalizations.tr('doctor_day_off');
+    if (reason == 'all_slots_booked') return AppLocalizations.tr('all_slots_booked');
+    if (reason == 'no_schedule_hours') return AppLocalizations.tr('doctor_hours_not_set');
+    if (daysLabel.isNotEmpty) {
+      return AppLocalizations.tr('no_slots_available').replaceAll('{days}', daysLabel);
+    }
+    return AppLocalizations.tr('no_slots_available').replaceAll('{days}', daysLabel);
   }
 
   Future<void> _save() async {
@@ -115,6 +147,8 @@ class _ReceptionistRescheduleDialogState extends State<ReceptionistRescheduleDia
 
   @override
   Widget build(BuildContext context) {
+    final emptyMessage = _emptySlotsMessage();
+
     return AlertDialog(
       title: Text(widget.title ?? AppLocalizations.tr('reschedule')),
       content: SizedBox(
@@ -139,7 +173,10 @@ class _ReceptionistRescheduleDialogState extends State<ReceptionistRescheduleDia
               if (_loadingSlots)
                 const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()))
               else if (_slots.isEmpty)
-                Text(AppLocalizations.tr('no_slots_available'))
+                Text(
+                  emptyMessage ?? AppLocalizations.tr('no_data'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                )
               else
                 Wrap(
                   spacing: 8,

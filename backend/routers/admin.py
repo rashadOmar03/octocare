@@ -286,12 +286,13 @@ def update_doctor_schedule(
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    from clinic_schedule import sync_doctor_weekly_hours, normalize_clinic_time_pair
+    from clinic_schedule import sync_doctor_weekly_hours, normalize_clinic_time_pair, parse_working_days
 
     if data.working_hours_start and data.working_hours_end:
         start, end = normalize_clinic_time_pair(data.working_hours_start, data.working_hours_end)
         sync_doctor_weekly_hours(db, doctor_id, start, end)
 
+    enabled_days: set[int] = set()
     for item in data.schedules:
         start, end = normalize_clinic_time_pair(item.start_time, item.end_time)
         row = (
@@ -316,6 +317,27 @@ def update_doctor_schedule(
                     is_available=item.is_available,
                 )
             )
+        if item.is_available:
+            enabled_days.add(item.day_of_week)
+
+    if enabled_days:
+        settings = db.query(ClinicSettings).first()
+        if settings:
+            clinic_days = parse_working_days(settings.working_days)
+            merged = clinic_days | enabled_days
+            if merged != clinic_days:
+                settings.working_days = ",".join(str(d) for d in sorted(merged))
+        single_day_offs = (
+            db.query(DoctorTimeOff)
+            .filter(
+                DoctorTimeOff.doctor_id == doctor_id,
+                DoctorTimeOff.start_date == DoctorTimeOff.end_date,
+            )
+            .all()
+        )
+        for off in list(single_day_offs):
+            if off.start_date.weekday() in enabled_days:
+                db.delete(off)
 
     doc_name = _doctor_display_name(db, doctor)
     notify_doctor(

@@ -563,6 +563,7 @@ def get_queue(
 def receptionist_available_slots(
     doctor_id: str = Query(...),
     slot_date: date = Query(..., alias="date"),
+    exclude_appointment_id: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("receptionist", "admin")),
 ):
@@ -588,7 +589,11 @@ def receptionist_available_slots(
     if not all_slots:
         return _empty_slots_response(db, settings, reason="no_schedule_hours")
 
-    free = [s for s in all_slots if is_slot_available(db, doctor_id, slot_date, s)]
+    free = [
+        s
+        for s in all_slots
+        if is_slot_available(db, doctor_id, slot_date, s, exclude_appointment_id=exclude_appointment_id)
+    ]
     if not free and all_slots:
         return _empty_slots_response(db, settings, reason="all_slots_booked")
 

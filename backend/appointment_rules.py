@@ -97,17 +97,20 @@ def is_slot_available(
     doctor_id: str,
     apt_date: date,
     candidate_slot: str,
+    exclude_appointment_id: str | None = None,
 ) -> bool:
     duration = _get_duration(db)
-    appointments = (
+    query = (
         db.query(Appointment)
         .filter(
             Appointment.doctor_id == doctor_id,
             Appointment.date == apt_date,
             Appointment.status.in_(DOCTOR_BUSY_STATUSES),
         )
-        .all()
     )
+    if exclude_appointment_id:
+        query = query.filter(Appointment.id != exclude_appointment_id)
+    appointments = query.all()
     for apt in appointments:
         if _slots_overlap(apt.time_slot, candidate_slot, duration):
             return False

@@ -78,6 +78,16 @@ def auth_as(db_session):
         del app.dependency_overrides[get_current_user]
 
 
+def _next_bookable_day(from_day: date | None = None) -> date:
+    working = {5, 6, 0, 1, 2, 3}
+    day = from_day or date.today()
+    for _ in range(14):
+        day += timedelta(days=1)
+        if day.weekday() in working:
+            return day
+    return date.today() + timedelta(days=2)
+
+
 def _seed(db_session):
     spec = Specialty(name="Cardiology")
     db_session.add(spec)
@@ -106,12 +116,12 @@ def _seed(db_session):
             )
         )
 
-    tomorrow = date.today() + timedelta(days=1)
+    bookable_day = _next_bookable_day()
     apt = Appointment(
         id=str(uuid.uuid4()),
         patient_id=pat_profile.id,
         doctor_id=doctor.id,
-        date=tomorrow,
+        date=bookable_day,
         time_slot="10:00",
         status="confirmed",
     )
@@ -125,7 +135,7 @@ def _seed(db_session):
         "doctor": doctor,
         "patient_profile": pat_profile,
         "appointment": apt,
-        "tomorrow": tomorrow,
+        "tomorrow": bookable_day,
     }
 
 
@@ -198,3 +208,28 @@ def test_doctor_can_add_own_time_off(client, db_session, auth_as):
     listed = client.get("/doctors/me/time-off")
     assert listed.status_code == 200
     assert len(listed.json()) == 1
+
+
+def test_reschedule_slots_exclude_current_appointment(client, db_session, auth_as):
+    data = _seed(db_session)
+    apt = data["appointment"]
+    slot_date = data["tomorrow"]
+
+    auth_as(data["receptionist"])
+    blocked = client.get(
+        "/receptionist/available-slots",
+        params={"doctor_id": data["doctor"].id, "date": slot_date.isoformat()},
+    )
+    assert blocked.status_code == 200
+    assert apt.time_slot not in blocked.json()["slots"]
+
+    freed = client.get(
+        "/receptionist/available-slots",
+        params={
+            "doctor_id": data["doctor"].id,
+            "date": slot_date.isoformat(),
+            "exclude_appointment_id": apt.id,
+        },
+    )
+    assert freed.status_code == 200
+    assert apt.time_slot in freed.json()["slots"]
