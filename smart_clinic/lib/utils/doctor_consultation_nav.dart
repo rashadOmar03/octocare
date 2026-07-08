@@ -19,6 +19,9 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
   final appointmentService = AppointmentService();
 
   String consultationErrorMessage(Object error) {
+    if (error is ApiException && error.message.isNotEmpty) {
+      return error.message;
+    }
     final text = error.toString().toLowerCase();
     if (text.contains('payment')) {
       return AppLocalizations.tr('payment_required_consultation');
@@ -26,15 +29,15 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
     if (text.contains('arrived') || text.contains('queue')) {
       return AppLocalizations.tr('arrived_required_consultation');
     }
-    if (error is ApiException && error.message.isNotEmpty) {
-      return error.message;
-    }
     return AppLocalizations.tr('consultation_not_available');
   }
 
   Future<Appointment> loadFromServer() async {
     final raw = await ApiService.instance.get('/appointments/$appointmentId');
-    return Appointment.fromJson(Map<String, dynamic>.from(raw as Map));
+    if (raw is! Map) {
+      throw ApiException('Unexpected appointment response.', 500);
+    }
+    return Appointment.fromJson(Map<String, dynamic>.from(raw));
   }
 
   try {
@@ -58,31 +61,24 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
       return false;
     }
 
-    if (!apt.isPaid) {
-      if (context.mounted) {
-        showErrorSnackBar(context, AppLocalizations.tr('payment_required_consultation'));
-      }
-      return false;
-    }
+    final hasInProgressRecord =
+        apt.hasConsultation || apt.medicalRecordId != null;
 
-    if (!_isActiveVisitStatus(apt.status)) {
-      if (context.mounted) {
-        showErrorSnackBar(context, AppLocalizations.tr('consultation_not_available'));
-      }
-      return false;
-    }
-
-    try {
-      apt = await appointmentService.startConsultation(appointmentId);
-    } catch (startError) {
-      apt = await loadFromServer();
-      final canProceed = apt.isPaid && _isActiveVisitStatus(apt.status);
-      if (!canProceed) {
-        if (context.mounted) {
-          showErrorSnackBar(context, consultationErrorMessage(startError));
+    if (!hasInProgressRecord) {
+      try {
+        apt = await appointmentService.startConsultation(appointmentId);
+      } catch (startError) {
+        apt = await loadFromServer();
+        final canProceed = apt.isPaid && _isActiveVisitStatus(apt.status);
+        if (!canProceed) {
+          if (context.mounted) {
+            showErrorSnackBar(context, consultationErrorMessage(startError));
+          }
+          return false;
         }
-        return false;
       }
+    } else {
+      apt = await loadFromServer();
     }
 
     if (!context.mounted) return false;
