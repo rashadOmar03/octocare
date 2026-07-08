@@ -13,6 +13,7 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
     return false;
   }
 
+  final navigator = Navigator.of(context);
   final appointmentService = AppointmentService();
 
   Future<Appointment?> loadFromServer() async {
@@ -31,27 +32,20 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
 
     if (apt.status == 'completed' || apt.isConsultationEditOnly) {
       if (!apt.hasConsultation && apt.medicalRecordId == null) {
-        if (context.mounted) {
-          showErrorSnackBar(context, AppLocalizations.tr('no_record_for_appointment'));
-        }
+        try { showErrorSnackBar(context, AppLocalizations.tr('no_record_for_appointment')); } catch (_) {}
         return false;
       }
-      if (!context.mounted) return false;
-      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
+      return navigator.pushNamed<bool>(AppRoutes.doctorConsultation, arguments: apt);
     }
 
     if (apt.status == 'cancelled') {
-      if (context.mounted) {
-        showErrorSnackBar(context, AppLocalizations.tr('consultation_not_available'));
-      }
+      try { showErrorSnackBar(context, AppLocalizations.tr('consultation_not_available')); } catch (_) {}
       return false;
     }
 
     final hasInProgressRecord = apt.hasConsultation || apt.medicalRecordId != null;
-
     if (hasInProgressRecord) {
-      if (!context.mounted) return false;
-      return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: apt);
+      return navigator.pushNamed<bool>(AppRoutes.doctorConsultation, arguments: apt);
     }
 
     Appointment navigateWith = apt;
@@ -62,10 +56,12 @@ Future<bool?> openDoctorConsultation(BuildContext context, Appointment appointme
       if (retryApt != null) navigateWith = retryApt;
     }
 
-    if (!context.mounted) return false;
-    return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: navigateWith);
-  } catch (e) {
-    if (!context.mounted) return false;
-    return Navigator.pushNamed<bool>(context, AppRoutes.doctorConsultation, arguments: appointment);
+    return navigator.pushNamed<bool>(AppRoutes.doctorConsultation, arguments: navigateWith);
+  } catch (_) {
+    try {
+      return navigator.pushNamed<bool>(AppRoutes.doctorConsultation, arguments: appointment);
+    } catch (_) {
+      return false;
+    }
   }
 }
