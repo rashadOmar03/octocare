@@ -508,6 +508,8 @@ def _no_cache_headers() -> dict[str, str]:
 
 def _patch_flutter_bootstrap(source: str, build_id: str) -> str:
     """Disable Flutter service worker and cache-bust main.dart.js."""
+    import time
+    live_token = f"{build_id}_{int(time.time())}"
     source = re.sub(
         r"_flutter\.loader\.load\(\{\s*serviceWorkerSettings:\s*\{[^}]*\}\s*\}\);",
         "_flutter.loader.load({});",
@@ -516,21 +518,23 @@ def _patch_flutter_bootstrap(source: str, build_id: str) -> str:
     )
     return source.replace(
         '"mainJsPath":"main.dart.js"',
-        f'"mainJsPath":"main.dart.js?v={build_id}"',
+        f'"mainJsPath":"main.dart.js?v={live_token}"',
     )
 
 
 def _patch_index_html(source: str, build_id: str) -> str:
+    import time
+    live_token = f"{build_id}_{int(time.time())}"
     if "__BUILD_ID__" in source:
-        return source.replace("__BUILD_ID__", build_id)
+        return source.replace("__BUILD_ID__", live_token)
     source = re.sub(
         r"window\.__CLINOVA_BUILD__\s*=\s*'[^']*'",
-        f"window.__CLINOVA_BUILD__ = '{build_id}'",
+        f"window.__CLINOVA_BUILD__ = '{live_token}'",
         source,
     )
     return re.sub(
         r"flutter_bootstrap\.js\?v=[^'\"]+",
-        f"flutter_bootstrap.js?v={build_id}",
+        f"flutter_bootstrap.js?v={live_token}",
         source,
     )
 
@@ -608,6 +612,7 @@ if WEB_BUILD.exists():
             target.name in _NO_CACHE_FILES
             or target.suffix in {".js", ".json"}
             or is_fallback
+            or "main.dart" in target.name
         )
         headers = _no_cache_headers() if no_cache else {}
         build_id = _web_build_id()
