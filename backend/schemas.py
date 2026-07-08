@@ -284,6 +284,7 @@ class ReceptionistReschedule(BaseModel):
     date: date
     time_slot: str
     confirm: bool = True
+    doctor_id: Optional[str] = None
 
 
 class AppointmentResponse(BaseModel):

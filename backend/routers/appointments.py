@@ -276,7 +276,7 @@ def get_doctors_public(
     query = db.query(Doctor).join(Profile, Doctor.profile_id == Profile.id)
     if specialty_id:
         query = query.filter(Doctor.specialty_id == specialty_id)
-    doctors = query.all()
+    doctors = query.order_by(Profile.first_name, Profile.last_name).all()
     from clinic_schedule import get_doctor_consultation_fee, is_doctor_on_vacation
     from datetime import date as date_cls
 
@@ -1029,15 +1029,20 @@ def receptionist_reschedule(
 
     was_cancelled = appointment.status == "cancelled"
     was_arrived = appointment.status == "arrived"
+    target_doctor_id = data.doctor_id or appointment.doctor_id
 
     if data.date < date.today():
         raise HTTPException(status_code=400, detail="Cannot reschedule to a past date")
+
+    doctor = db.query(Doctor).filter(Doctor.id == target_doctor_id).first()
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Doctor not found")
 
     day_of_week = data.date.weekday()
     schedule = (
         db.query(DoctorSchedule)
         .filter(
-            DoctorSchedule.doctor_id == appointment.doctor_id,
+            DoctorSchedule.doctor_id == target_doctor_id,
             DoctorSchedule.day_of_week == day_of_week,
             DoctorSchedule.is_available == True,
         )
@@ -1048,7 +1053,7 @@ def receptionist_reschedule(
 
     from clinic_schedule import is_doctor_on_vacation
 
-    if is_doctor_on_vacation(db, appointment.doctor_id, data.date):
+    if is_doctor_on_vacation(db, target_doctor_id, data.date):
         raise HTTPException(status_code=400, detail="Doctor is on vacation on the selected date")
 
     settings = db.query(ClinicSettings).first()
@@ -1059,7 +1064,7 @@ def receptionist_reschedule(
 
     ensure_doctor_slot_free(
         db,
-        appointment.doctor_id,
+        target_doctor_id,
         data.date,
         data.time_slot,
         exclude_appointment_id=appointment_id,
@@ -1068,33 +1073,49 @@ def receptionist_reschedule(
     validate_patient_booking(
         db,
         appointment.patient_id,
-        appointment.doctor_id,
+        target_doctor_id,
         data.date,
         data.time_slot,
         exclude_appointment_id=appointment_id,
     )
 
-    was_arrived = appointment.status == "arrived"
     old_date = appointment.date
     old_doctor_id = appointment.doctor_id
+    doctor_changed = target_doctor_id != appointment.doctor_id
 
     appointment.date = data.date
     appointment.time_slot = data.time_slot
+    appointment.doctor_id = target_doctor_id
     appointment.queue_number = None
     if data.confirm or was_cancelled:
         appointment.status = "confirmed"
-    elif was_arrived:
+    elif was_arrived and not doctor_changed:
+        appointment.status = "confirmed"
+    elif was_arrived and doctor_changed:
         appointment.status = "confirmed"
     else:
         appointment.status = "pending"
 
     if was_arrived:
         _renumber_doctor_queue(db, old_date, old_doctor_id, notify_patients=True)
+        if doctor_changed or appointment.date != old_date or appointment.time_slot != data.time_slot:
+            _apply_arrived_to_queue(
+                db,
+                appointment,
+                actor_user_id=current_user.id,
+                audit_action="reassign_doctor_arrived",
+            )
+
+    record = db.query(MedicalRecord).filter(MedicalRecord.appointment_id == appointment.id).first()
+    if record and doctor_changed:
+        record.doctor_id = target_doctor_id
 
     patient_name = _get_patient_name(db, appointment.patient_id)
     doctor_name = _get_doctor_name(db, appointment.doctor_id)
 
-    action = "reactivate_appointment" if was_cancelled else "reschedule_appointment"
+    action = "reactivate_appointment" if was_cancelled else (
+        "reassign_doctor" if doctor_changed else "reschedule_appointment"
+    )
     log_audit(
         db,
         current_user.id,

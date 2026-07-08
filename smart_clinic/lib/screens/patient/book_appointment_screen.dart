@@ -414,14 +414,17 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       itemBuilder: (ctx, i) {
         final d = _doctors[i];
         final isSelected = _selectedDoctor?.id == d.id;
+        final displayName = (d.name ?? '').trim();
         return Card(
           color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1) : null,
           child: ListTile(
-            leading: CircleAvatar(child: Text(d.name?.isNotEmpty == true ? d.name![0] : '?')),
-            title: Text(d.name ?? ''),
+            leading: CircleAvatar(child: Text(displayName.isNotEmpty ? displayName[0] : '?')),
+            title: Text(displayName.isEmpty ? AppLocalizations.tr('doctor') : displayName),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (d.qualifications != null && d.qualifications!.trim().isNotEmpty)
+                  Text(d.qualifications!.trim()),
                 Text(d.specialty ?? _selectedSpecialtyName ?? ''),
                 if (d.consultationFee != null)
                   Text('${AppLocalizations.tr('consultation_fee')}: ${d.consultationFee!.toStringAsFixed(0)} EGP'),
