@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../config/sensor_colors.dart';
 import '../../l10n/localization.dart';
 import '../../services/sensor_service.dart';
 import '../../models/sensor_reading.dart';
@@ -21,6 +24,7 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
   List<Map<String, dynamic>> _alerts = [];
   bool _isLoading = true;
   late TabController _periodTab;
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
@@ -30,28 +34,38 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
       if (!_periodTab.indexIsChanging) _loadHistory();
     });
     _loadData();
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) _loadData(silent: true);
+    });
   }
 
   @override
   void dispose() {
+    _autoRefreshTimer?.cancel();
     _periodTab.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadData({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
     try {
       _latest = await _service.getLatest();
       _alerts = await _service.getAlerts();
       await _loadHistory();
     } catch (e) {
-      if (mounted) {
+      if (mounted && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString()), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     }
-    setState(() => _isLoading = false);
+    if (mounted) {
+      if (silent) {
+        setState(() {});
+      } else {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   Future<void> _loadHistory() async {
@@ -108,15 +122,15 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _buildMetricCard(AppLocalizations.tr('heart_rate'), _latest?.heartRate, AppLocalizations.tr('bpm'), Icons.favorite, const Color(0xFFD32F2F), 'hr'),
+                  _buildMetricCard(AppLocalizations.tr('heart_rate'), _latest?.heartRate, AppLocalizations.tr('bpm'), Icons.favorite, SensorPlotterColors.bpm, 'hr'),
                   const SizedBox(width: 8),
-                  _buildMetricCard(AppLocalizations.tr('temperature'), _latest?.temperature, '°C', Icons.thermostat, const Color(0xFFF57C00), 'temp'),
+                  _buildMetricCard(AppLocalizations.tr('temperature'), _latest?.temperature, '°C', Icons.thermostat, SensorPlotterColors.temp, 'temp'),
                   const SizedBox(width: 8),
-                  _buildMetricCard(AppLocalizations.tr('gsr'), _latest?.gsr, '', Icons.bolt, const Color(0xFF6A1B9A), 'gsr'),
+                  _buildMetricCard(AppLocalizations.tr('gsr'), _latest?.gsr, '', Icons.bolt, SensorPlotterColors.gsr, 'gsr'),
                   const SizedBox(width: 8),
-                  _buildMetricCard(AppLocalizations.tr('ecg'), _latest?.ecg, '', Icons.monitor_heart_outlined, const Color(0xFFC62828), 'ecg'),
+                  _buildMetricCard(AppLocalizations.tr('ecg'), _latest?.ecg, '', Icons.monitor_heart_outlined, SensorPlotterColors.ecg, 'ecg'),
                   const SizedBox(width: 8),
-                  _buildMetricCard(AppLocalizations.tr('emg'), _latest?.emg, '', Icons.fitness_center, const Color(0xFF00838F), 'emg'),
+                  _buildMetricCard(AppLocalizations.tr('emg'), _latest?.emg, '', Icons.fitness_center, SensorPlotterColors.emg, 'emg'),
                 ],
               ),
             ),
@@ -129,7 +143,7 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
                 shortLabel: 'ECG',
                 samples: _latest!.waveformSamples('ecg'),
                 currentValue: _latest!.ecg,
-                color: const Color(0xFFC62828),
+                color: SensorPlotterColors.ecg,
                 height: 120,
               ),
               const SizedBox(height: 8),
@@ -138,7 +152,7 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
                 shortLabel: 'EMG',
                 samples: _latest!.waveformSamples('emg'),
                 currentValue: _latest!.emg,
-                color: const Color(0xFF00838F),
+                color: SensorPlotterColors.emg,
                 height: 120,
               ),
               const SizedBox(height: 8),
@@ -147,7 +161,7 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
                 shortLabel: 'GSR',
                 samples: _latest!.waveformSamples('gsr'),
                 currentValue: _latest!.gsr,
-                color: const Color(0xFF6A1B9A),
+                color: SensorPlotterColors.gsr,
                 height: 120,
               ),
             ],
@@ -258,9 +272,9 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
     }
 
     final ordered = _history.reversed.toList();
-    final gsr = ordered.map((r) => r.gsr).whereType<double>().where((v) => v > 0).toList();
-    final ecg = ordered.map((r) => r.ecg).whereType<double>().where((v) => v > 0).toList();
-    final emg = ordered.map((r) => r.emg).whereType<double>().where((v) => v > 0).toList();
+    final gsr = ordered.map((r) => r.gsr).whereType<double>().where((v) => v != 0).toList();
+    final ecg = ordered.map((r) => r.ecg).whereType<double>().where((v) => v != 0).toList();
+    final emg = ordered.map((r) => r.emg).whereType<double>().where((v) => v != 0).toList();
 
     return Column(
       children: [
@@ -269,7 +283,7 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
             title: AppLocalizations.tr('ecg'),
             description: AppLocalizations.tr('ecg_chart_desc'),
             unit: '',
-            color: const Color(0xFFC62828),
+            color: SensorPlotterColors.ecg,
             values: ecg,
           ),
         if (emg.isNotEmpty)
@@ -277,7 +291,7 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
             title: AppLocalizations.tr('emg'),
             description: AppLocalizations.tr('emg_chart_desc'),
             unit: '',
-            color: const Color(0xFF00838F),
+            color: SensorPlotterColors.emg,
             values: emg,
           ),
         if (gsr.isNotEmpty)
@@ -285,7 +299,7 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> with Single
             title: AppLocalizations.tr('gsr'),
             description: AppLocalizations.tr('gsr_chart_desc'),
             unit: '',
-            color: const Color(0xFF6A1B9A),
+            color: SensorPlotterColors.gsr,
             values: gsr,
           ),
         if (gsr.isEmpty && ecg.isEmpty && emg.isEmpty)

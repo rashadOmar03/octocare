@@ -128,14 +128,14 @@ class VoiceService {
       );
     }
 
-    final lang = language ?? _uiLanguage();
+    final lang = language;
     final filename = _platform.recordingFilename;
     final response = await ApiService.instance.postMultipart(
       '/ai/transcribe',
       fileField: 'file',
       bytes: bytes,
       filename: filename,
-      fields: {'language': lang},
+      fields: lang != null && (lang == 'ar' || lang == 'en') ? {'language': lang} : null,
       timeout: const Duration(seconds: 180),
     );
 

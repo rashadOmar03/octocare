@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../l10n/localization.dart';
-import '../providers/locale_provider.dart';
 import '../services/voice_service.dart';
 import '../utils/ui_helpers.dart';
 
@@ -39,8 +37,7 @@ class _VoiceMicButtonState extends State<VoiceMicButton> {
     if (_voice.isRecording) {
       setState(() => _busy = true);
       try {
-        final locale = Provider.of<LocaleProvider>(context, listen: false);
-        final lang = widget.languageOverride ?? (locale.isArabic ? 'ar' : 'en');
+    final lang = widget.languageOverride;
         final text = await _voice.stopAndTranscribe(language: lang);
         if (widget.onAutoSend != null) {
           await widget.onAutoSend!(text);

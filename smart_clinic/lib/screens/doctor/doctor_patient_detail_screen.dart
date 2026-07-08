@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../l10n/localization.dart';
 import '../../config/routes.dart';
 import '../../config/api_config.dart';
+import '../../config/sensor_colors.dart';
 import '../../services/api_service.dart';
 import '../../services/medical_service.dart';
 import '../../services/sensor_service.dart';
@@ -40,6 +43,7 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
   final _allergiesController = TextEditingController();
   final _chronicDiseasesController = TextEditingController();
   final _existingConditionsController = TextEditingController();
+  Timer? _sensorRefreshTimer;
 
   @override
   void initState() {
@@ -49,10 +53,24 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
       _patient = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
       _loadData();
     });
+    _sensorRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted && _tabController.index == 2) {
+        unawaited(_refreshSensorHistory());
+      }
+    });
+  }
+
+  Future<void> _refreshSensorHistory() async {
+    if (_patientId == null) return;
+    try {
+      final history = await _sensorService.getHistory(patientId: _patientId, period: 'monthly');
+      if (mounted) setState(() => _sensorHistory = history);
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    _sensorRefreshTimer?.cancel();
     _tabController.dispose();
     _bloodTypeController.dispose();
     _allergiesController.dispose();
@@ -621,8 +639,6 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
       itemCount: _sensorHistory.length,
       itemBuilder: (ctx, i) {
         final r = _sensorHistory[i];
-        final bpmWave = r.waveformSamples('bpm');
-        final tempWave = r.waveformSamples('temp');
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: Padding(
@@ -642,39 +658,19 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _vitalChip(Icons.favorite, const Color(0xFFD32F2F), '${r.heartRate?.toInt() ?? '--'}', AppLocalizations.tr('bpm'))),
-                    Expanded(child: _vitalChip(Icons.thermostat, const Color(0xFFF57C00), r.temperature?.toStringAsFixed(1) ?? '--', '°C')),
-                    Expanded(child: _vitalChip(Icons.bolt, const Color(0xFF6A1B9A), '${r.gsr?.toInt() ?? '--'}', 'GSR')),
+                    Expanded(child: _vitalChip(Icons.favorite, SensorPlotterColors.bpm, '${r.heartRate?.toInt() ?? '--'}', AppLocalizations.tr('bpm'))),
+                    Expanded(child: _vitalChip(Icons.thermostat, SensorPlotterColors.temp, r.temperature?.toStringAsFixed(1) ?? '--', '°C')),
+                    Expanded(child: _vitalChip(Icons.bolt, SensorPlotterColors.gsr, '${r.gsr?.toInt() ?? '--'}', 'GSR')),
                   ],
                 ),
                 const SizedBox(height: 12),
-                SensorWaveformChart(
-                  title: AppLocalizations.tr('heart_rate'),
-                  shortLabel: 'BPM',
-                  samples: bpmWave.isNotEmpty ? bpmWave : (r.heartRate != null && r.heartRate! > 0 ? [r.heartRate!] : const []),
-                  currentValue: r.heartRate?.toDouble(),
-                  unit: AppLocalizations.tr('bpm'),
-                  color: const Color(0xFFD32F2F),
-                  height: 88,
-                ),
-                const SizedBox(height: 8),
-                SensorWaveformChart(
-                  title: AppLocalizations.tr('temperature'),
-                  shortLabel: 'TEMP',
-                  samples: tempWave.isNotEmpty ? tempWave : (r.temperature != null && r.temperature! > 0 ? [r.temperature!] : const []),
-                  currentValue: r.temperature,
-                  unit: '°C',
-                  color: const Color(0xFFF57C00),
-                  height: 88,
-                ),
-                const SizedBox(height: 8),
                 SensorWaveformChart(
                   title: AppLocalizations.tr('ecg'),
                   shortLabel: 'ECG',
                   samples: r.waveformSamples('ecg'),
                   currentValue: r.ecg,
-                  color: const Color(0xFFD32F2F),
-                  height: 88,
+                  color: SensorPlotterColors.ecg,
+                  height: 120,
                 ),
                 const SizedBox(height: 8),
                 SensorWaveformChart(
@@ -682,8 +678,8 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
                   shortLabel: 'EMG',
                   samples: r.waveformSamples('emg'),
                   currentValue: r.emg,
-                  color: const Color(0xFF1565C0),
-                  height: 88,
+                  color: SensorPlotterColors.emg,
+                  height: 120,
                 ),
                 const SizedBox(height: 8),
                 SensorWaveformChart(
@@ -691,8 +687,8 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
                   shortLabel: 'GSR',
                   samples: r.waveformSamples('gsr'),
                   currentValue: r.gsr,
-                  color: const Color(0xFF6A1B9A),
-                  height: 88,
+                  color: SensorPlotterColors.gsr,
+                  height: 120,
                 ),
               ],
             ),
