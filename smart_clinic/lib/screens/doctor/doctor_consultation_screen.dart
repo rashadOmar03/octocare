@@ -88,9 +88,25 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
     if (_appointment == null && _standalonePatient == null && _recordId == null) return;
 
     await _refreshAppointmentFromServer();
+    await _ensureConsultationStarted();
     if (_recordId != null || _appointment?.id != null || _appointment?.medicalRecordId != null) {
       await _loadExistingRecord();
     }
+  }
+
+  Future<void> _ensureConsultationStarted() async {
+    if (_appointment == null || _appointment!.id == null) return;
+    final status = _appointment!.status;
+    if (status == 'completed' || status == 'cancelled') return;
+    if (_appointment!.hasConsultation || _appointment!.medicalRecordId != null) return;
+    try {
+      final response = await ApiService.instance.put(
+        '/appointments/${_appointment!.id}/start-consultation', {},
+      );
+      if (response is Map) {
+        _appointment = Appointment.fromJson(Map<String, dynamic>.from(response));
+      }
+    } catch (_) {}
   }
 
   Future<void> _refreshAppointmentFromServer() async {
