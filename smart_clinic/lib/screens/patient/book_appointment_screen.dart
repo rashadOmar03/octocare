@@ -36,12 +36,15 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   DateTime? _selectedDate;
   String? _selectedTime;
 
-  List<int> _workingDays = [5, 6, 0, 1, 2, 3];
-  String _workingDaysLabel = 'Sat, Sun, Mon, Tue, Wed, Thu';
+  List<int> _workingDays = [];
+  String _workingDaysLabel = '';
+  bool _bookingInfoLoaded = false;
+  late Future<void> _bookingInfoFuture;
 
   @override
   void initState() {
     super.initState();
+    _bookingInfoFuture = _loadBookingInfo();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -49,7 +52,6 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         Navigator.pushReplacementNamed(context, AppRoutes.profileComplete);
         return;
       }
-      _loadBookingInfo();
       _loadSpecialties();
     });
   }
@@ -65,13 +67,37 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       if (label != null && label.isNotEmpty) {
         _workingDaysLabel = label;
       }
-      if (mounted) setState(() {});
     } catch (_) {}
+    _bookingInfoLoaded = true;
+    _syncSelectedDate();
+    if (mounted) setState(() {});
   }
 
   bool _isClinicOpen(DateTime day) {
+    if (_workingDays.isEmpty) return false;
     final pythonDow = day.weekday == DateTime.sunday ? 6 : day.weekday - 1;
     return _workingDays.contains(pythonDow);
+  }
+
+  DateTime _nextOpenDay(DateTime from) {
+    var day = DateTime(from.year, from.month, from.day);
+    final limit = DateTime.now().add(const Duration(days: 60));
+    while (!day.isAfter(limit)) {
+      if (_isClinicOpen(day)) return day;
+      day = day.add(const Duration(days: 1));
+    }
+    return DateTime(from.year, from.month, from.day);
+  }
+
+  void _syncSelectedDate() {
+    if (!_bookingInfoLoaded || _workingDays.isEmpty) return;
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final base = _selectedDate ?? tomorrow;
+    final start = base.isBefore(tomorrow) ? tomorrow : base;
+    final fixed = _nextOpenDay(start);
+    if (_selectedDate == null || !_isClinicOpen(_selectedDate!)) {
+      _selectedDate = fixed;
+    }
   }
 
   Future<void> _loadSpecialties() async {
@@ -228,7 +254,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
       case 1:
         return _selectedDoctor != null;
       case 2:
-        return _selectedDate != null;
+        return _selectedDate != null && _isClinicOpen(_selectedDate!);
       case 3:
         return _selectedTime != null;
       default:
@@ -243,14 +269,9 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         setState(() => _currentStep = 1);
       }
     } else if (_currentStep == 1 && _selectedDoctor != null) {
-      var next = DateTime.now().add(const Duration(days: 1));
-      while (!_isClinicOpen(next) && next.isBefore(DateTime.now().add(const Duration(days: 60)))) {
-        next = next.add(const Duration(days: 1));
-      }
-      setState(() {
-        _currentStep = 2;
-        _selectedDate = next;
-      });
+      await _bookingInfoFuture;
+      _syncSelectedDate();
+      setState(() => _currentStep = 2);
     } else if (_currentStep == 2 && _selectedDate != null) {
       if (!_isClinicOpen(_selectedDate!)) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -458,11 +479,27 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
   }
 
   Widget _buildDatePicker() {
+    if (!_bookingInfoLoaded) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     var initial = _selectedDate ?? tomorrow;
-    while (!_isClinicOpen(initial) && initial.isBefore(DateTime.now().add(const Duration(days: 60)))) {
-      initial = initial.add(const Duration(days: 1));
+    if (!_isClinicOpen(initial)) {
+      initial = _nextOpenDay(tomorrow);
     }
+    if (_selectedDate == null || !_isClinicOpen(_selectedDate!)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_selectedDate == null || !_isClinicOpen(_selectedDate!)) {
+          setState(() => _selectedDate = initial);
+        }
+      });
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -475,22 +512,27 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-          child: Text(
-            '${AppLocalizations.tr('working_days')}: $_workingDaysLabel',
-            style: Theme.of(context).textTheme.bodySmall,
+        if (_workingDaysLabel.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: Text(
+              '${AppLocalizations.tr('working_days')}: $_workingDaysLabel',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
-        ),
         CalendarDatePicker(
+          key: ValueKey('booking-cal-${_workingDays.join('-')}-${initial.year}-${initial.month}-${initial.day}'),
           initialDate: initial,
           firstDate: tomorrow,
           lastDate: DateTime.now().add(const Duration(days: 60)),
           selectableDayPredicate: _isClinicOpen,
-          onDateChanged: (date) => setState(() {
-            _selectedDate = date;
-            _selectedTime = null;
-          }),
+          onDateChanged: (date) {
+            if (!_isClinicOpen(date)) return;
+            setState(() {
+              _selectedDate = date;
+              _selectedTime = null;
+            });
+          },
         ),
       ],
     );
