@@ -8,6 +8,7 @@ import '../../services/sensor_service.dart';
 import '../../models/sensor_reading.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/sensor_waveform_chart.dart';
+import '../../widgets/sensor_vitals_icons_row.dart';
 
 class PatientSensorsScreen extends StatefulWidget {
   const PatientSensorsScreen({super.key});
@@ -264,12 +265,12 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _vitalChip(Icons.favorite, SensorPlotterColors.bpm, '${r.heartRate?.toInt() ?? '--'}', AppLocalizations.tr('bpm'))),
-                Expanded(child: _vitalChip(Icons.thermostat, SensorPlotterColors.temp, r.temperature?.toStringAsFixed(1) ?? '--', '°C')),
-                Expanded(child: _vitalChip(Icons.bolt, SensorPlotterColors.gsr, '${r.gsr?.toInt() ?? '--'}', 'GSR')),
-              ],
+            SensorVitalsIconsRow(
+              heartRate: r.heartRate,
+              temperature: r.temperature,
+              gsr: r.gsr,
+              ecg: r.ecg,
+              emg: r.emg,
             ),
             if (hasWaveforms) ...[
               const SizedBox(height: 12),
@@ -311,17 +312,6 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> {
     );
   }
 
-  Widget _vitalChip(IconData icon, Color color, String value, String unit) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(width: 4),
-        Text('$value $unit', style: TextStyle(fontWeight: FontWeight.w600, color: color)),
-      ],
-    );
-  }
-
   Widget _buildHistoryTable() {
     if (_history.isEmpty) return const SizedBox.shrink();
 
@@ -341,11 +331,11 @@ class _PatientSensorsScreenState extends State<PatientSensorsScreen> {
             final ts = r.timestamp ?? '-';
             return DataRow(cells: [
               DataCell(Text(ts.length > 16 ? ts.substring(0, 16) : ts)),
-              DataCell(Text(r.heartRate != null && r.heartRate! > 0 ? '${r.heartRate!.toInt()}' : '--')),
-              DataCell(Text(r.temperature != null && r.temperature! > 0 ? '${r.temperature!.toStringAsFixed(1)}°C' : '--')),
-              DataCell(Text(r.gsr != null && r.gsr! > 0 ? r.gsr!.toStringAsFixed(0) : '--')),
-              DataCell(Text(r.ecg != null && r.ecg! > 0 ? r.ecg!.toStringAsFixed(0) : '--')),
-              DataCell(Text(r.emg != null && r.emg! > 0 ? r.emg!.toStringAsFixed(0) : '--')),
+              DataCell(Text(r.heartRate != null && r.heartRate! > 0 ? SensorVitalsIconsRow.formatValue(r.heartRate) : '--')),
+              DataCell(Text(r.temperature != null && r.temperature! > 0 ? '${SensorVitalsIconsRow.formatValue(r.temperature)}°C' : '--')),
+              DataCell(Text(r.gsr != null && r.gsr! > 0 ? SensorVitalsIconsRow.formatValue(r.gsr) : '--')),
+              DataCell(Text(r.ecg != null && r.ecg! > 0 ? SensorVitalsIconsRow.formatValue(r.ecg) : '--')),
+              DataCell(Text(r.emg != null && r.emg! > 0 ? SensorVitalsIconsRow.formatValue(r.emg) : '--')),
             ]);
           }).toList(),
         ),

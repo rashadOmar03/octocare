@@ -387,8 +387,6 @@ def _make_waveform_chart(
     d.add(String(0, total_height - 32, description, fontSize=8, fillColor=colors.grey))
 
     clean = [float(v) for v in values if v is not None]
-    if len(clean) > 200:
-        clean = clean[-200:]
     if len(clean) < 2:
         d.add(String(0, 40, "No waveform data", fontSize=9))
         return d
@@ -423,9 +421,15 @@ def _make_waveform_chart(
         poly_points.extend([x, y])
 
     if len(poly_points) >= 4:
-        d.add(PolyLine(poly_points, strokeColor=colors.HexColor(color), strokeWidth=1.4))
+        d.add(PolyLine(poly_points, strokeColor=colors.HexColor(color), strokeWidth=1.6))
 
-    d.add(String(x0, 0, "Live waveform snapshot (most recent reading)", fontSize=7, fillColor=colors.grey))
+    for tick in range(5):
+        frac = tick / 4
+        sample_i = int(round(frac * max(n - 1, 0)))
+        x = x0 + frac * plot_w
+        d.add(String(x - 8, y0 - 10, str(sample_i), fontSize=6, fillColor=colors.grey))
+
+    d.add(String(x0, 0, f"Sample 0 → {n - 1} (full saved recording)", fontSize=7, fillColor=colors.grey))
     return d
 
 
@@ -450,6 +454,18 @@ def _waveform_values(sensor: SensorData | None, field: str) -> list[float]:
         except (TypeError, ValueError):
             continue
     return out
+
+
+def _fmt_sensor_val(val) -> str:
+    if val is None:
+        return "-"
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        return str(val)
+    if f == 0:
+        return "-"
+    return f"{f:.10f}".rstrip("0").rstrip(".")
 
 
 def _generate_patient_report(profile, db: Session):
@@ -587,12 +603,12 @@ def _generate_patient_report(profile, db: Session):
         elements.append(Paragraph("Latest Vitals (from clinic sensor)", subtitle_style))
         vitals = [
             ["Metric", "Value"],
-            ["Heart Rate", f"{latest_sensor.heart_rate} bpm"],
-            ["Temperature", f"{latest_sensor.temperature}°C"],
-            ["GSR", f"{latest_sensor.gsr or 0:.0f}"],
-            ["ECG", f"{latest_sensor.ecg or 0:.0f}"],
-            ["EMG", f"{latest_sensor.emg or 0:.0f}"],
-            ["Recorded", latest_sensor.timestamp.strftime("%Y-%m-%d %H:%M") if latest_sensor.timestamp else "-"],
+            ["Heart Rate", f"{_fmt_sensor_val(latest_sensor.heart_rate)} bpm"],
+            ["Temperature", f"{_fmt_sensor_val(latest_sensor.temperature)}°C"],
+            ["GSR", _fmt_sensor_val(latest_sensor.gsr)],
+            ["ECG", _fmt_sensor_val(latest_sensor.ecg)],
+            ["EMG", _fmt_sensor_val(latest_sensor.emg)],
+            ["Recorded", latest_sensor.timestamp.isoformat() if latest_sensor.timestamp else "-"],
         ]
         elements.append(_build_table(vitals, col_widths=[2 * inch, 4 * inch]))
         elements.append(Spacer(1, 12))
@@ -602,66 +618,58 @@ def _generate_patient_report(profile, db: Session):
         sensor_data = [["Date/Time", "HR (bpm)", "Temp (°C)", "GSR", "ECG", "EMG"]]
         for s in reversed(sensors[:15]):
             sensor_data.append([
-                s.timestamp.strftime("%Y-%m-%d %H:%M") if s.timestamp else "-",
-                str(s.heart_rate) if s.heart_rate else "-",
-                f"{s.temperature:.1f}" if s.temperature else "-",
-                f"{s.gsr:.0f}" if s.gsr else "-",
-                f"{s.ecg:.0f}" if s.ecg else "-",
-                f"{s.emg:.0f}" if s.emg else "-",
+                s.timestamp.isoformat() if s.timestamp else "-",
+                _fmt_sensor_val(s.heart_rate),
+                _fmt_sensor_val(s.temperature),
+                _fmt_sensor_val(s.gsr),
+                _fmt_sensor_val(s.ecg),
+                _fmt_sensor_val(s.emg),
             ])
         elements.append(_build_table(
             sensor_data,
-            col_widths=[1.2 * inch, 0.7 * inch, 0.7 * inch, 0.6 * inch, 0.6 * inch, 0.6 * inch],
+            col_widths=[1.6 * inch, 0.7 * inch, 0.7 * inch, 0.6 * inch, 0.6 * inch, 0.6 * inch],
         ))
         elements.append(Spacer(1, 14))
 
-        ordered = list(reversed(sensors[:15]))
-        label_for = lambda s: s.timestamp.strftime("%m/%d %H:%M") if s.timestamp else "-"
-
-        def _points(field: str) -> list[tuple[str, float]]:
-            out: list[tuple[str, float]] = []
-            for s in ordered:
-                val = getattr(s, field, None)
-                if val is None:
-                    continue
-                fv = float(val)
-                out.append((label_for(s), fv))
-            return out
-
-        hr_points = _points("heart_rate")
-        temp_points = _points("temperature")
-        gsr_points = _points("gsr")
-        ecg_points = _points("ecg")
-        emg_points = _points("emg")
-
-        elements.append(Paragraph("Sensor Charts", subtitle_style))
+        elements.append(Paragraph("Sensor Waveforms (saved recordings)", subtitle_style))
         elements.append(Paragraph(
-            "Waveform charts from the most recent sensor session. Heart rate and temperature are in the tables above.",
+            "Each chart is the full waveform saved during that visit — not averaged, resampled, or altered.",
             body_style,
         ))
         elements.append(Spacer(1, 6))
 
-        latest_for_wave = latest_sensor or (ordered[-1] if ordered else None)
-        wf_specs = [
-            ("ECG Chart", "Electrocardiogram waveform.", "ecg", _waveform_values(latest_for_wave, "ecg"), ecg_points, "ECG", "#42A5F5"),
-            ("EMG Chart", "Electromyography waveform.", "emg", _waveform_values(latest_for_wave, "emg"), emg_points, "EMG", "#EF5350"),
-            ("GSR Chart", "Galvanic skin response waveform.", "gsr", _waveform_values(latest_for_wave, "gsr"), gsr_points, "GSR", "#66BB6A"),
-        ]
         charts_added = 0
-        for title, desc, _field, wf_vals, scalar_pts, ylab, col in wf_specs:
-            if len(wf_vals) >= 2:
-                chart = _make_waveform_chart(title, desc, wf_vals, ylab, col)
-                charts_added += 1
-            elif scalar_pts:
-                chart = _make_line_chart(title, desc + " (reading levels over time)", scalar_pts, ylab, col)
-                charts_added += 1
-            else:
-                continue
-            elements.append(_ChartFlowable(chart, 460, 174))
+        for s in reversed(sensors[:15]):
+            ts = s.timestamp.isoformat() if s.timestamp else "Unknown"
+            elements.append(Paragraph(f"Recording: {ts}", body_style))
+            session_vitals = [
+                ["HR (bpm)", "Temp (°C)", "GSR", "ECG", "EMG"],
+                [
+                    _fmt_sensor_val(s.heart_rate),
+                    _fmt_sensor_val(s.temperature),
+                    _fmt_sensor_val(s.gsr),
+                    _fmt_sensor_val(s.ecg),
+                    _fmt_sensor_val(s.emg),
+                ],
+            ]
+            elements.append(_build_table(session_vitals, col_widths=[1.1 * inch] * 5))
+            elements.append(Spacer(1, 4))
+
+            for title, desc, field, ylab, col in [
+                ("ECG", "Electrocardiogram waveform.", "ecg", "ECG", "#42A5F5"),
+                ("EMG", "Electromyography waveform.", "emg", "EMG", "#EF5350"),
+                ("GSR", "Galvanic skin response waveform.", "gsr", "GSR", "#66BB6A"),
+            ]:
+                wf_vals = _waveform_values(s, field)
+                if len(wf_vals) >= 2:
+                    chart = _make_waveform_chart(f"{title} — {ts}", desc, wf_vals, ylab, col)
+                    elements.append(_ChartFlowable(chart, 460, 174))
+                    elements.append(Spacer(1, 6))
+                    charts_added += 1
             elements.append(Spacer(1, 8))
 
         if charts_added == 0:
-            elements.append(Paragraph("No chartable sensor waveform data yet.", body_style))
+            elements.append(Paragraph("No saved waveform data yet.", body_style))
 
     doc.build(
         elements,
@@ -754,12 +762,12 @@ def _patient_report_tabular(profile, db: Session, fmt: str):
     )
     for s in sensors:
         sensor_rows.append([
-            s.timestamp.strftime("%Y-%m-%d %H:%M") if s.timestamp else "-",
-            str(s.heart_rate),
-            f"{s.temperature:.1f}" if s.temperature else "-",
-            f"{s.gsr:.0f}" if s.gsr else "-",
-            f"{s.ecg:.0f}" if s.ecg else "-",
-            f"{s.emg:.0f}" if s.emg else "-",
+            s.timestamp.isoformat() if s.timestamp else "-",
+            _fmt_sensor_val(s.heart_rate),
+            _fmt_sensor_val(s.temperature),
+            _fmt_sensor_val(s.gsr),
+            _fmt_sensor_val(s.ecg),
+            _fmt_sensor_val(s.emg),
         ])
 
     base = f"patient_report_{profile.first_name}_{profile.last_name}"

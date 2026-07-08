@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import '../../l10n/localization.dart';
 import '../../services/report_download_service.dart';
 import '../../services/api_service.dart';
+import '../../config/sensor_colors.dart';
+import '../../models/sensor_reading.dart';
 import '../../widgets/loading_widget.dart';
-import '../../widgets/sensor_history_chart.dart';
+import '../../widgets/sensor_waveform_chart.dart';
+import '../../widgets/sensor_vitals_icons_row.dart';
 import '../../utils/time_format.dart';
 
 class PatientReportsScreen extends StatefulWidget {
@@ -110,7 +113,7 @@ class _PatientReportsScreenState extends State<PatientReportsScreen> {
                   _buildConsultationsTable(),
                   const SizedBox(height: 16),
                   _buildSectionTitle(AppLocalizations.tr('sensor_readings')),
-                  _buildSensorChart(),
+                  _buildSensorHistory(),
                   const SizedBox(height: 8),
                   _buildSensorTable(),
                   const SizedBox(height: 16),
@@ -223,11 +226,11 @@ class _PatientReportsScreenState extends State<PatientReportsScreen> {
               DataCell(Text(r['receptionist_name']?.toString() ?? '-')),
               DataCell(Text(r['diagnosis']?.toString() ?? '-')),
               DataCell(Text(notes.isNotEmpty ? notes : '-')),
-              DataCell(Text(hr != null && hr != 0 ? '$hr' : '--')),
-              DataCell(Text(temp != null && temp != 0 ? '$temp°C' : '--')),
-              DataCell(Text(gsr != null && gsr != 0 ? '$gsr' : '--')),
-              DataCell(Text(ecg != null && ecg != 0 ? '$ecg' : '--')),
-              DataCell(Text(emg != null && emg != 0 ? '$emg' : '--')),
+              DataCell(Text(_sensorCell(hr))),
+              DataCell(Text(temp != null && temp != 0 ? '${_sensorCell(temp)}°C' : '--')),
+              DataCell(Text(_sensorCell(gsr))),
+              DataCell(Text(_sensorCell(ecg))),
+              DataCell(Text(_sensorCell(emg))),
               DataCell(Text(r['payment_amount'] != null ? '${r['payment_amount']}' : '-')),
               DataCell(Text(r['payment_method']?.toString() ?? '-')),
               DataCell(Text(AppLocalizations.trValue(r['status']?.toString() ?? '-'))),
@@ -238,44 +241,85 @@ class _PatientReportsScreenState extends State<PatientReportsScreen> {
     );
   }
 
-  Widget _buildSensorChart() {
+  String _sensorCell(dynamic value) {
+    if (value == null || value == 0) return '--';
+    final n = value is num ? value.toDouble() : double.tryParse(value.toString());
+    return SensorVitalsIconsRow.formatValue(n);
+  }
+
+  Widget _buildSensorHistory() {
     final sensors = _list('sensor_readings');
     if (sensors.isEmpty) return _emptyCard();
 
-    final ordered = sensors.reversed.toList();
-    final hr = ordered.map((s) => (s['heart_rate'] as num?)?.toDouble()).whereType<double>().where((v) => v > 0).toList();
-    final temp = ordered.map((s) => (s['temperature'] as num?)?.toDouble()).whereType<double>().where((v) => v > 0).toList();
-    final gsr = ordered.map((s) => (s['gsr'] as num?)?.toDouble()).whereType<double>().where((v) => v > 0).toList();
-
-    if (hr.isEmpty && temp.isEmpty && gsr.isEmpty) return _emptyCard();
-
     return Column(
-      children: [
-        if (hr.isNotEmpty)
-          SensorHistoryChart(
-            title: AppLocalizations.tr('heart_rate'),
-            description: AppLocalizations.tr('hr_chart_desc'),
-            unit: AppLocalizations.tr('bpm'),
-            color: const Color(0xFFD32F2F),
-            values: hr,
+      children: sensors.map((raw) {
+        final reading = SensorReading.fromJson(raw);
+        final ecg = reading.waveformSamples('ecg');
+        final emg = reading.waveformSamples('emg');
+        final gsr = reading.waveformSamples('gsr');
+        final hasWaveforms = ecg.length >= 2 || emg.length >= 2 || gsr.length >= 2;
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.access_time, size: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(reading.timestamp ?? '', style: Theme.of(context).textTheme.bodySmall)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SensorVitalsIconsRow(
+                  heartRate: reading.heartRate,
+                  temperature: reading.temperature,
+                  gsr: reading.gsr,
+                  ecg: reading.ecg,
+                  emg: reading.emg,
+                ),
+                if (hasWaveforms) ...[
+                  const SizedBox(height: 12),
+                  if (ecg.length >= 2)
+                    SensorWaveformChart(
+                      title: AppLocalizations.tr('ecg'),
+                      shortLabel: 'ECG',
+                      samples: ecg,
+                      currentValue: reading.ecg,
+                      color: SensorPlotterColors.ecg,
+                      height: 120,
+                    ),
+                  if (emg.length >= 2) ...[
+                    const SizedBox(height: 8),
+                    SensorWaveformChart(
+                      title: AppLocalizations.tr('emg'),
+                      shortLabel: 'EMG',
+                      samples: emg,
+                      currentValue: reading.emg,
+                      color: SensorPlotterColors.emg,
+                      height: 120,
+                    ),
+                  ],
+                  if (gsr.length >= 2) ...[
+                    const SizedBox(height: 8),
+                    SensorWaveformChart(
+                      title: AppLocalizations.tr('gsr_waveform'),
+                      shortLabel: 'GSR',
+                      samples: gsr,
+                      currentValue: reading.gsr,
+                      color: SensorPlotterColors.gsr,
+                      height: 120,
+                    ),
+                  ],
+                ],
+              ],
+            ),
           ),
-        if (temp.isNotEmpty)
-          SensorHistoryChart(
-            title: AppLocalizations.tr('temperature'),
-            description: AppLocalizations.tr('temp_chart_desc'),
-            unit: '°C',
-            color: const Color(0xFFF57C00),
-            values: temp,
-          ),
-        if (gsr.isNotEmpty)
-          SensorHistoryChart(
-            title: AppLocalizations.tr('gsr'),
-            description: AppLocalizations.tr('gsr_chart_desc'),
-            unit: '',
-            color: const Color(0xFF6A1B9A),
-            values: gsr,
-          ),
-      ],
+        );
+      }).toList(),
     );
   }
 
@@ -298,12 +342,12 @@ class _PatientReportsScreenState extends State<PatientReportsScreen> {
           rows: sensors.take(20).map((s) {
             final ts = s['timestamp']?.toString() ?? '-';
             return DataRow(cells: [
-              DataCell(Text(ts.length > 16 ? ts.substring(0, 16) : ts)),
-              DataCell(Text('${s['heart_rate'] ?? '-'}')),
-              DataCell(Text(s['temperature'] != null && s['temperature'] != 0 ? '${s['temperature']}°C' : '--')),
-              DataCell(Text(s['gsr'] != null && s['gsr'] != 0 ? '${s['gsr']}' : '--')),
-              DataCell(Text(s['ecg'] != null && s['ecg'] != 0 ? '${s['ecg']}' : '--')),
-              DataCell(Text(s['emg'] != null && s['emg'] != 0 ? '${s['emg']}' : '--')),
+              DataCell(Text(ts)),
+              DataCell(Text(_sensorCell(s['heart_rate']))),
+              DataCell(Text(s['temperature'] != null && s['temperature'] != 0 ? '${_sensorCell(s['temperature'])}°C' : '--')),
+              DataCell(Text(_sensorCell(s['gsr']))),
+              DataCell(Text(_sensorCell(s['ecg']))),
+              DataCell(Text(_sensorCell(s['emg']))),
             ]);
           }).toList(),
         ),

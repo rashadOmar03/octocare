@@ -17,6 +17,7 @@ import '../../widgets/loading_widget.dart';
 import '../../widgets/empty_state.dart';
 import '../../services/report_download_service.dart';
 import '../../widgets/sensor_waveform_chart.dart';
+import '../../widgets/sensor_vitals_icons_row.dart';
 import '../../widgets/user_avatar.dart';
 import '../../utils/ui_helpers.dart';
 
@@ -656,12 +657,12 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
                   ],
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _vitalChip(Icons.favorite, SensorPlotterColors.bpm, '${r.heartRate?.toInt() ?? '--'}', AppLocalizations.tr('bpm'))),
-                    Expanded(child: _vitalChip(Icons.thermostat, SensorPlotterColors.temp, r.temperature?.toStringAsFixed(1) ?? '--', '°C')),
-                    Expanded(child: _vitalChip(Icons.bolt, SensorPlotterColors.gsr, '${r.gsr?.toInt() ?? '--'}', 'GSR')),
-                  ],
+                SensorVitalsIconsRow(
+                  heartRate: r.heartRate,
+                  temperature: r.temperature,
+                  gsr: r.gsr,
+                  ecg: r.ecg,
+                  emg: r.emg,
                 ),
                 const SizedBox(height: 12),
                 SensorWaveformChart(
@@ -695,17 +696,6 @@ class _DoctorPatientDetailScreenState extends State<DoctorPatientDetailScreen> w
           ),
         );
       },
-    );
-  }
-
-  Widget _vitalChip(IconData icon, Color color, String value, String unit) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(width: 4),
-        Text('$value $unit', style: TextStyle(fontWeight: FontWeight.w600, color: color)),
-      ],
     );
   }
 
