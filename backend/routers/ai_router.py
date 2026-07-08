@@ -3,7 +3,7 @@ import re
 import uuid
 import json
 import base64
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from openai import OpenAI
 from json_repair import repair_json
@@ -64,9 +64,19 @@ from agent_router import (
     baseline_intents_for_role,
     classify_intents_semantic,
     merge_intent_results,
+    _resolve_conflicts,
 )
 
 router = APIRouter()
+
+
+def _iso_utc(dt: datetime | None) -> str | None:
+    """Serialize naive UTC datetimes with a Z suffix for correct client parsing."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return f"{dt.isoformat()}Z"
+    return dt.astimezone(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
 
 LM_STUDIO_URL = os.getenv("LM_STUDIO_URL", "http://127.0.0.1:1234/v1")
 LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "gemma-4-E2B-it-Q4_K_M")
@@ -515,6 +525,15 @@ def _fetch_agent_facts(
 ) -> dict:
     """Run the tools indicated by intents and merge the results."""
     facts: dict = {}
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    facts["reference_dates"] = {
+        "today": str(today),
+        "today_weekday": today.strftime("%A"),
+        "tomorrow": str(tomorrow),
+        "tomorrow_weekday": tomorrow.strftime("%A"),
+        "note": "Use these server dates when the user says today or tomorrow.",
+    }
     directory_roles = ("patient", "receptionist", "admin")
 
     # ── Clinic info / specialties / doctors (not for logged-in doctors) ───────
@@ -745,6 +764,7 @@ async def agent_chat(
     for baseline in baseline_intents_for_role(role):
         if baseline not in intents:
             intents.append(baseline)
+    intents = _resolve_conflicts(intents, role)
 
     # 3. Fetch live DB facts
     try:
@@ -841,8 +861,8 @@ async def list_chats(
             "message_count": msg_count,
             "remaining_messages": max(0, MAX_MESSAGES_PER_CHAT - msg_count),
             "max_messages": MAX_MESSAGES_PER_CHAT,
-            "updated_at": c.updated_at.isoformat() if c.updated_at else None,
-            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "updated_at": _iso_utc(c.updated_at),
+            "created_at": _iso_utc(c.created_at),
         })
     return result
 
@@ -871,7 +891,7 @@ async def get_chat(
         "message_count": msg_count,
         "remaining_messages": max(0, MAX_MESSAGES_PER_CHAT - msg_count),
         "max_messages": MAX_MESSAGES_PER_CHAT,
-        "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
+        "updated_at": _iso_utc(conv.updated_at),
     }
 
 

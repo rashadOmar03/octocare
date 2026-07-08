@@ -147,7 +147,8 @@ def _resolve_conflicts(intents: list[str], role: str) -> list[str]:
     """Same priority rules as keyword router."""
     result = list(intents)
     if role == "patient" and "my_appointments" in result and "doctor_availability" in result:
-        result.remove("doctor_availability")
+        # Slot lookup beats generic "my appointments" baseline when both are present.
+        result.remove("my_appointments")
     if role == "doctor":
         for drop in ("doctor_availability", "doctor_search", "symptom_advice"):
             if drop in result:

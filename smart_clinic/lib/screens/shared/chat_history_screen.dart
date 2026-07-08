@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../l10n/localization.dart';
 import '../../services/api_service.dart';
+import '../../utils/time_format.dart';
 import '../../utils/ui_helpers.dart';
 import '../../widgets/ai_chat_panel.dart';
 
@@ -94,21 +95,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     if (deleted) _loadChats();
   }
 
-  String _formatDate(String? iso) {
-    if (iso == null) return '';
-    try {
-      final dt = DateTime.parse(iso).toLocal();
-      final now = DateTime.now();
-      final diff = now.difference(dt);
-      if (diff.inMinutes < 1) return AppLocalizations.tr('just_now');
-      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-      if (diff.inHours < 24) return '${diff.inHours}h ago';
-      if (diff.inDays < 7) return '${diff.inDays}d ago';
-      return '${dt.day}/${dt.month}/${dt.year}';
-    } catch (_) {
-      return '';
-    }
-  }
+  String _formatDate(String? iso) => TimeFormat.formatChatTimestamp(iso);
 
   Widget _buildDeleteHintBanner(ThemeData theme) {
     final hint = kIsWeb || MediaQuery.sizeOf(context).width >= 600

@@ -98,6 +98,7 @@ from models import (
     Specialty,
     User,
 )
+from clinic_schedule import working_days_label, parse_working_days, DEFAULT_WORKING_DAYS
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
@@ -160,9 +161,21 @@ def _rating_stats(db: Session, doctor_id: str) -> dict:
 
 # ─── Clinic info ──────────────────────────────────────────────────────────────
 
+_WEEKDAY_NAMES_EN = (
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+)
+
+
+def _closed_days_label(raw: str | None) -> str:
+    open_days = parse_working_days(raw)
+    closed = [_WEEKDAY_NAMES_EN[d] for d in range(7) if d not in open_days]
+    return ", ".join(closed) if closed else "none"
+
+
 def tool_clinic_settings(db: Session) -> dict:
     s = db.query(ClinicSettings).first()
     if not s:
+        open_label = working_days_label(",".join(str(d) for d in DEFAULT_WORKING_DAYS))
         return {
             "clinic_name": "Octocare Clinic",
             "address": None,
@@ -170,10 +183,16 @@ def tool_clinic_settings(db: Session) -> dict:
             "email": None,
             "working_hours_start": "09:00",
             "working_hours_end": "17:00",
-            "working_days": "Sun,Mon,Tue,Wed,Thu",
+            "working_days_open": open_label,
+            "closed_days": "Friday",
+            "working_days_note": (
+                "working_days_open lists days the clinic accepts bookings. "
+                "Friday is closed by default."
+            ),
             "default_fee": 100.0,
             "appointment_duration": 30,
         }
+    open_label = working_days_label(s.working_days)
     return {
         "clinic_name": s.clinic_name,
         "address": s.address,
@@ -181,7 +200,12 @@ def tool_clinic_settings(db: Session) -> dict:
         "email": s.email,
         "working_hours_start": s.working_hours_start,
         "working_hours_end": s.working_hours_end,
-        "working_days": s.working_days,
+        "working_days_open": open_label,
+        "closed_days": _closed_days_label(s.working_days),
+        "working_days_note": (
+            "working_days_open lists OPEN days only. closed_days lists CLOSED days. "
+            "Patients can book on any working_days_open day."
+        ),
         "default_fee": float(s.default_fee),
         "appointment_duration": s.appointment_duration,
     }

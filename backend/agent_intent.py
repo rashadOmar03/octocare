@@ -350,8 +350,6 @@ def detect_intent(message: str, role: str) -> list[str]:
         )
         if _match(message, _MY_APTS_KW) or personal_booking:
             intents.append("my_appointments")
-            if "doctor_availability" in intents:
-                intents.remove("doctor_availability")
 
     # ── Receptionist & admin ───────────────────────────────────────────────────
     if role in ("receptionist", "admin"):

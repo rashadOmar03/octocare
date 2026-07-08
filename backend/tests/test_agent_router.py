@@ -47,14 +47,14 @@ class TestMergeIntentResults:
         merged = merge_intent_results(None, ["revenue"], "receptionist")
         assert merged == ["revenue"]
 
-    def test_patient_my_apts_drops_availability_conflict(self):
+    def test_patient_availability_wins_over_my_apts_conflict(self):
         merged = merge_intent_results(
             ["my_appointments", "doctor_availability"],
             [],
             "patient",
         )
-        assert "my_appointments" in merged
-        assert "doctor_availability" not in merged
+        assert "doctor_availability" in merged
+        assert "my_appointments" not in merged
 
 
 class TestBaselineIntents:
