@@ -1,4 +1,5 @@
 import 'package:intl/intl.dart';
+import 'package:flutter/material.dart';
 import '../l10n/localization.dart';
 
 class TimeFormat {
@@ -37,5 +38,21 @@ class TimeFormat {
     final dt = DateTime(2000, 1, 1, hour, minute);
     final locale = AppLocalizations.currentLocale == 'ar' ? 'ar' : 'en_US';
     return DateFormat('h:mm a', locale).format(dt);
+  }
+
+  static TimeOfDay parseToTimeOfDay(String? time24, {TimeOfDay fallback = const TimeOfDay(hour: 9, minute: 0)}) {
+    if (time24 == null || time24.isEmpty) return fallback;
+    final parts = time24.split(':');
+    if (parts.length < 2) return fallback;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return fallback;
+    }
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  static String formatTimeOfDay24(TimeOfDay time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 }

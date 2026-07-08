@@ -66,7 +66,7 @@ _LEGACY_TEXT_WORKING_DAYS = frozenset({
 
 
 def ensure_clinic_working_days(db: Session) -> bool:
-    """Upgrade clinic settings to Sat–Thu if still on legacy Mon–Fri schedule."""
+    """One-time upgrade for legacy Mon–Fri / text-label schedules only."""
     settings = db.query(ClinicSettings).first()
     if not settings:
         return False
@@ -76,12 +76,6 @@ def ensure_clinic_working_days(db: Session) -> bool:
     target = ",".join(str(d) for d in sorted(DEFAULT_WORKING_DAYS))
 
     if raw in _LEGACY_TEXT_WORKING_DAYS or current == _LEGACY_MON_FRI:
-        settings.working_days = target
-        db.commit()
-        return True
-
-    # Middle East clinic default: Saturday must be bookable.
-    if 5 not in current:
         settings.working_days = target
         db.commit()
         return True
@@ -319,9 +313,6 @@ def resolve_doctor_schedule_for_date(
     if is_doctor_on_vacation(db, doctor_id, slot_date):
         return None, "vacation"
 
-    ensure_doctor_schedules(db, [doctor_id])
-    repair_doctor_with_no_available_days(db, doctor_id)
-
     day = slot_date.weekday()
     row = (
         db.query(DoctorSchedule)
@@ -337,17 +328,5 @@ def resolve_doctor_schedule_for_date(
     if row and not row.is_available:
         return None, "doctor_day_off"
 
-    start = normalize_time_hhmm(settings.working_hours_start if settings else None, default="09:00")
-    end_default = normalize_time_hhmm(settings.working_hours_end if settings else None, default="17:00")
-    start, end = normalize_clinic_time_pair(start, end_default)
-    row = DoctorSchedule(
-        doctor_id=doctor_id,
-        day_of_week=day,
-        start_time=start,
-        end_time=end,
-        is_available=True,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return row, None
+    # No schedule row: treat as off-day (do not auto-create bookable hours).
+    return None, "doctor_day_off"

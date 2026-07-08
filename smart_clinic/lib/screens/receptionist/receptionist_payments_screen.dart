@@ -149,6 +149,8 @@ class _ReceptionistPaymentsScreenState extends State<ReceptionistPaymentsScreen>
         }
       }
     }
+
+    double feeFor(Appointment? apt) => apt?.consultationFee ?? _consultationFee;
     String method = 'cash';
     PlatformFile? proofFile;
     bool saving = false;
@@ -192,7 +194,7 @@ class _ReceptionistPaymentsScreenState extends State<ReceptionistPaymentsScreen>
                     contentPadding: EdgeInsets.zero,
                     title: Text(AppLocalizations.tr('consultation_fee')),
                     trailing: Text(
-                      '$_consultationFee ${AppLocalizations.tr('egp')}',
+                      '${feeFor(selectedAppointment).toStringAsFixed(0)} ${AppLocalizations.tr('egp')}',
                       style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),

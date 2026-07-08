@@ -471,7 +471,7 @@ def book_appointment_for_patient(
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    validate_booking_date(data.date, "receptionist")
+    validate_booking_date(data.date, "receptionist", db)
 
     settings = db.query(ClinicSettings).first()
     schedule, block_reason = resolve_doctor_schedule_for_date(db, data.doctor_id, data.date, settings)

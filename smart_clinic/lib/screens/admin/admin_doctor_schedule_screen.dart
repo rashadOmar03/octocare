@@ -3,6 +3,7 @@ import '../../l10n/localization.dart';
 import '../../services/admin_service.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../widgets/time_picker_field.dart';
 import '../../widgets/bottom_nav.dart';
 
 class AdminDoctorScheduleScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
   final Map<int, bool> _dayAvailable = {};
   final Map<int, TextEditingController> _dayStart = {};
   final Map<int, TextEditingController> _dayEnd = {};
+  Set<int> _clinicWorkingDays = {5, 6, 0, 1, 2, 3};
 
   static const _dayOrder = [5, 6, 0, 1, 2, 3, 4];
 
@@ -102,6 +104,16 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
     try {
       final detail = await _service.getDoctorManage(doctorId);
       _detail = detail;
+      try {
+        final clinic = await _service.getSettings();
+        final rawDays = clinic['working_days']?.toString() ?? '5,6,0,1,2,3';
+        _clinicWorkingDays = rawDays
+            .split(',')
+            .map((e) => int.tryParse(e.trim()))
+            .whereType<int>()
+            .toSet();
+        if (_clinicWorkingDays.isEmpty) _clinicWorkingDays = {5, 6, 0, 1, 2, 3};
+      } catch (_) {}
       final fee = detail['consultation_fee'];
       _feeController.text = fee == null ? '' : '$fee';
       final schedules = (detail['schedules'] as List? ?? []).cast<Map>();
@@ -125,7 +137,9 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
       _startHourController.text = start;
       _endHourController.text = end;
       for (final day in _dayOrder) {
-        if (schedules.isNotEmpty) {
+        if (!_clinicWorkingDays.contains(day)) {
+          _dayAvailable[day] = false;
+        } else if (schedules.isNotEmpty) {
           _dayAvailable[day] = false;
         }
       }
@@ -161,7 +175,7 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
                 'day_of_week': day,
                 'start_time': _dayStart[day]?.text.trim() ?? _startHourController.text.trim(),
                 'end_time': _dayEnd[day]?.text.trim() ?? _endHourController.text.trim(),
-                'is_available': _dayAvailable[day] == true,
+                'is_available': _clinicWorkingDays.contains(day) && _dayAvailable[day] == true,
               })
           .toList();
       _detail = await _service.updateDoctorSchedule(_selectedDoctorId!, {
@@ -361,13 +375,14 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
           Text(AppLocalizations.tr('working_hours'), style: Theme.of(context).textTheme.titleMedium),
           Row(
             children: [
-              Expanded(child: CustomTextField(controller: _startHourController, label: AppLocalizations.tr('working_hours'))),
+              Expanded(child: TimePickerField(controller: _startHourController, label: AppLocalizations.tr('working_hours'))),
               const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('-')),
-              Expanded(child: CustomTextField(controller: _endHourController, label: '')),
+              Expanded(child: TimePickerField(controller: _endHourController, label: '')),
             ],
           ),
           const SizedBox(height: 8),
           ..._dayOrder.map((day) {
+            final clinicOpen = _clinicWorkingDays.contains(day);
             return Card(
               child: Padding(
                 padding: const EdgeInsets.all(8),
@@ -377,15 +392,21 @@ class _AdminDoctorScheduleScreenState extends State<AdminDoctorScheduleScreen> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(_dayLabel(day)),
-                      value: _dayAvailable[day] == true,
-                      onChanged: (v) => setState(() => _dayAvailable[day] = v),
+                      subtitle: clinicOpen
+                          ? null
+                          : Text(
+                              AppLocalizations.tr('clinic_closed_day'),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                      value: clinicOpen && _dayAvailable[day] == true,
+                      onChanged: clinicOpen ? (v) => setState(() => _dayAvailable[day] = v) : null,
                     ),
-                    if (_dayAvailable[day] == true)
+                    if (clinicOpen && _dayAvailable[day] == true)
                       Row(
                         children: [
-                          Expanded(child: CustomTextField(controller: _dayStart[day]!, label: AppLocalizations.tr('working_hours'))),
+                          Expanded(child: TimePickerField(controller: _dayStart[day]!, label: AppLocalizations.tr('working_hours'))),
                           const SizedBox(width: 8),
-                          Expanded(child: CustomTextField(controller: _dayEnd[day]!, label: '')),
+                          Expanded(child: TimePickerField(controller: _dayEnd[day]!, label: '')),
                         ],
                       ),
                   ],

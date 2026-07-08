@@ -416,12 +416,15 @@ def _enrich_appointment(apt: Appointment, db: Session) -> dict:
         result["patient_photo_url"] = patient.photo_url
     doctor = db.query(Doctor).filter(Doctor.id == apt.doctor_id).first()
     if doctor:
+        from clinic_schedule import get_doctor_consultation_fee
+
         doc_profile = db.query(Profile).filter(Profile.id == doctor.profile_id).first()
         if doc_profile:
             result["doctor_name"] = f"Dr. {doc_profile.first_name or ''} {doc_profile.last_name or ''}".strip()
         spec = db.query(Specialty).filter(Specialty.id == doctor.specialty_id).first()
         if spec:
             result["specialty_name"] = spec.name
+        result["consultation_fee"] = get_doctor_consultation_fee(db, doctor)
     payment = db.query(Payment).filter(Payment.appointment_id == apt.id).first()
     if payment:
         result["payment_status"] = payment.payment_status

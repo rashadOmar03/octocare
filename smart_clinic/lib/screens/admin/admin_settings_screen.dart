@@ -5,6 +5,7 @@ import '../../config/routes.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../utils/ui_helpers.dart';
+import '../../widgets/time_picker_field.dart';
 import '../../widgets/bottom_nav.dart';
 
 class AdminSettingsScreen extends StatefulWidget {
@@ -218,12 +219,11 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               CustomTextField(controller: _durationController, label: AppLocalizations.tr('appointment_duration'), prefixIcon: Icons.timer, keyboardType: TextInputType.number),
               Row(
                 children: [
-                  Expanded(child: CustomTextField(controller: _startHourController, label: AppLocalizations.tr('working_hours'), validator: _validateTime)),
+                  Expanded(child: TimePickerField(controller: _startHourController, label: AppLocalizations.tr('working_hours'))),
                   const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('-')),
-                  Expanded(child: CustomTextField(controller: _endHourController, label: '', validator: _validateTime)),
+                  Expanded(child: TimePickerField(controller: _endHourController, label: '')),
                 ],
               ),
-              Text(AppLocalizations.tr('hours_24_hint'), style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 8),
               Text(AppLocalizations.tr('working_days'), style: Theme.of(context).textTheme.titleSmall),
               Wrap(

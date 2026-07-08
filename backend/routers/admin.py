@@ -286,7 +286,7 @@ def update_doctor_schedule(
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    from clinic_schedule import sync_doctor_weekly_hours, normalize_clinic_time_pair, repair_doctor_with_no_available_days
+    from clinic_schedule import sync_doctor_weekly_hours, normalize_clinic_time_pair
 
     if data.working_hours_start and data.working_hours_end:
         start, end = normalize_clinic_time_pair(data.working_hours_start, data.working_hours_end)
@@ -316,8 +316,6 @@ def update_doctor_schedule(
                     is_available=item.is_available,
                 )
             )
-
-    repair_doctor_with_no_available_days(db, doctor_id)
 
     doc_name = _doctor_display_name(db, doctor)
     notify_doctor(
