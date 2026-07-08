@@ -14,7 +14,16 @@ import '../../utils/time_format.dart';
 import '../../utils/ui_helpers.dart';
 
 class DoctorConsultationScreen extends StatefulWidget {
-  const DoctorConsultationScreen({super.key});
+  final Appointment? initialAppointment;
+  final Map<String, dynamic>? initialPatient;
+  final String? initialRecordId;
+
+  const DoctorConsultationScreen({
+    super.key,
+    this.initialAppointment,
+    this.initialPatient,
+    this.initialRecordId,
+  });
 
   @override
   State<DoctorConsultationScreen> createState() => _DoctorConsultationScreenState();
@@ -71,20 +80,29 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
   bool _needsListRefresh = false;
 
   Future<void> _bootstrap() async {
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is Appointment) {
-      _appointment = args;
-    } else if (args is Map) {
-      if (args['appointment'] is Appointment) {
-        _appointment = args['appointment'] as Appointment;
-      }
-      if (args['patient'] is Map) {
-        _standalonePatient = Map<String, dynamic>.from(args['patient'] as Map);
-      }
-      if (args['record_id'] != null) {
-        _recordId = args['record_id'].toString();
+    // Primary source: constructor parameters (reliable on Flutter web)
+    _appointment ??= widget.initialAppointment;
+    _standalonePatient ??= widget.initialPatient;
+    _recordId ??= widget.initialRecordId;
+
+    // Fallback: route arguments (for routes map / other callers)
+    if (_appointment == null && _standalonePatient == null && _recordId == null) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is Appointment) {
+        _appointment = args;
+      } else if (args is Map) {
+        if (args['appointment'] is Appointment) {
+          _appointment = args['appointment'] as Appointment;
+        }
+        if (args['patient'] is Map) {
+          _standalonePatient = Map<String, dynamic>.from(args['patient'] as Map);
+        }
+        if (args['record_id'] != null) {
+          _recordId = args['record_id'].toString();
+        }
       }
     }
+
     if (_appointment == null && _standalonePatient == null && _recordId == null) {
       if (mounted) {
         showErrorSnackBar(context, AppLocalizations.tr('consultation_not_available'));
@@ -269,6 +287,10 @@ class _DoctorConsultationScreenState extends State<DoctorConsultationScreen> wit
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_appointment != null || _standalonePatient != null) return;
+    _appointment ??= widget.initialAppointment;
+    _standalonePatient ??= widget.initialPatient;
+    _recordId ??= widget.initialRecordId;
     if (_appointment != null || _standalonePatient != null) return;
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Appointment) {
