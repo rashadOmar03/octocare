@@ -762,28 +762,6 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                     height: 140,
                     maxSamples: _waveformCapacity,
                   ),
-                  const SizedBox(height: 8),
-                  SensorWaveformChart(
-                    title: AppLocalizations.tr('heart_rate'),
-                    shortLabel: 'BPM',
-                    samples: _bpmSamples,
-                    currentValue: _heartRate,
-                    unit: AppLocalizations.tr('bpm'),
-                    color: SensorPlotterColors.bpm,
-                    height: 120,
-                    maxSamples: _waveformCapacity,
-                  ),
-                  const SizedBox(height: 8),
-                  SensorWaveformChart(
-                    title: AppLocalizations.tr('temperature'),
-                    shortLabel: 'Temp',
-                    samples: _tempSamples,
-                    currentValue: _temperature,
-                    unit: '°C',
-                    color: SensorPlotterColors.temp,
-                    height: 120,
-                    maxSamples: _waveformCapacity,
-                  ),
                   const SizedBox(height: 24),
                   Row(
                     children: [
