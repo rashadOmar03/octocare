@@ -25,6 +25,7 @@ from models import (
     Notification,
     AIConversation,
     EmailOTP,
+    AuditLog,
 )
 
 
@@ -196,7 +197,7 @@ def _delete_doctor_data(db: Session, profile: Profile) -> dict[str, int]:
 def delete_user_account(db: Session, user: User) -> dict[str, int]:
     """Permanently delete one user and all related rows."""
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
-    stats: dict[str, int] = {"notifications": 0, "ai_conversations": 0, "email_otps": 0}
+    stats: dict[str, int] = {"notifications": 0, "ai_conversations": 0, "email_otps": 0, "audit_logs": 0}
 
     try:
         if user.role == "patient" and profile:
@@ -210,6 +211,11 @@ def delete_user_account(db: Session, user: User) -> dict[str, int]:
 
         db.query(Document).filter(Document.uploaded_by == user.id).update(
             {Document.uploaded_by: None}, synchronize_session=False
+        )
+        stats["audit_logs"] = (
+            db.query(AuditLog)
+            .filter(AuditLog.user_id == user.id)
+            .update({AuditLog.user_id: None}, synchronize_session=False)
         )
         stats["notifications"] = (
             db.query(Notification)

@@ -25,6 +25,7 @@ from models import (
     Notification,
     AIConversation,
     EmailOTP,
+    AuditLog,
 )
 
 
@@ -135,6 +136,9 @@ def purge_all_patients(db: Session) -> dict[str, int]:
         )
 
         if patient_user_ids:
+            db.query(AuditLog).filter(AuditLog.user_id.in_(patient_user_ids)).update(
+                {AuditLog.user_id: None}, synchronize_session=False
+            )
             stats["notifications"] = (
                 db.query(Notification)
                 .filter(Notification.user_id.in_(patient_user_ids))
