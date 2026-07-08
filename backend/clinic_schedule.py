@@ -306,10 +306,11 @@ def resolve_doctor_schedule_for_date(
     Resolve the doctor's schedule for a booking date.
     Returns (schedule, block_reason) where block_reason is one of:
     clinic_closed, vacation, doctor_day_off, or None when bookable.
-    """
-    if not is_clinic_open(slot_date, settings):
-        return None, "clinic_closed"
 
+    A doctor explicitly marked available on a weekday is bookable even when
+    clinic-wide working_days has not been updated yet (admin may enable the
+    doctor before syncing global clinic days).
+    """
     if is_doctor_on_vacation(db, doctor_id, slot_date):
         return None, "vacation"
 
@@ -325,8 +326,11 @@ def resolve_doctor_schedule_for_date(
     if row and row.is_available:
         row.start_time, row.end_time = normalize_clinic_time_pair(row.start_time, row.end_time)
         return row, None
+
+    if not is_clinic_open(slot_date, settings):
+        return None, "clinic_closed"
+
     if row and not row.is_available:
         return None, "doctor_day_off"
 
-    # No schedule row: treat as off-day (do not auto-create bookable hours).
     return None, "doctor_day_off"

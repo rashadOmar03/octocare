@@ -1044,8 +1044,6 @@ def receptionist_reschedule(
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found")
 
-    validate_booking_date(data.date, "receptionist", db)
-
     settings = db.query(ClinicSettings).first()
     schedule, block_reason = resolve_doctor_schedule_for_date(db, target_doctor_id, data.date, settings)
     if block_reason == "vacation":

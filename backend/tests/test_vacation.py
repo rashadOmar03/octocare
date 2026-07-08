@@ -233,3 +233,36 @@ def test_reschedule_slots_exclude_current_appointment(client, db_session, auth_a
     )
     assert freed.status_code == 200
     assert apt.time_slot in freed.json()["slots"]
+
+
+def test_doctor_schedule_overrides_clinic_closed_day(client, db_session, auth_as):
+    data = _seed(db_session)
+    # Thursday (3) — remove from clinic working days but keep doctor available.
+    settings = db_session.query(ClinicSettings).first()
+    settings.working_days = "5,6,0,1,2"
+    db_session.commit()
+
+    thursday = _next_bookable_day()
+    while thursday.weekday() != 3:
+        thursday += timedelta(days=1)
+
+    db_session.add(
+        DoctorSchedule(
+            doctor_id=data["doctor"].id,
+            day_of_week=3,
+            start_time="09:00",
+            end_time="17:00",
+            is_available=True,
+        )
+    )
+    db_session.commit()
+
+    auth_as(data["receptionist"])
+    resp = client.get(
+        "/receptionist/available-slots",
+        params={"doctor_id": data["doctor"].id, "date": thursday.isoformat()},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("reason") != "clinic_closed"
+    assert len(body["slots"]) > 0

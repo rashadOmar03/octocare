@@ -48,17 +48,16 @@ def validate_booking_date(apt_date: date, user_role: str = "patient", db: Sessio
                     "Please select tomorrow or a later date."
                 ),
             )
+        if db is not None:
+            from clinic_schedule import is_clinic_open, working_days_label
 
-    if db is not None:
-        from clinic_schedule import is_clinic_open, working_days_label
-
-        settings = db.query(ClinicSettings).first()
-        if not is_clinic_open(apt_date, settings):
-            label = working_days_label(settings.working_days if settings else None)
-            raise HTTPException(
-                status_code=400,
-                detail=f"The clinic is closed on this day. Working days: {label}.",
-            )
+            settings = db.query(ClinicSettings).first()
+            if not is_clinic_open(apt_date, settings):
+                label = working_days_label(settings.working_days if settings else None)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"The clinic is closed on this day. Working days: {label}.",
+                )
 
 
 def slot_duration_minutes(db: Session) -> int:
