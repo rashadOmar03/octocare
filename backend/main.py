@@ -491,7 +491,9 @@ def _web_build_id() -> str:
     """Changes whenever `flutter build web` produces a new main.dart.js."""
     main_js = WEB_BUILD / "main.dart.js"
     if main_js.is_file():
-        return str(int(main_js.stat().st_mtime))
+        import hashlib
+        h = hashlib.md5(main_js.read_bytes()[:4096]).hexdigest()[:10]
+        return f"{int(main_js.stat().st_mtime)}_{h}"
     return "0"
 
 
