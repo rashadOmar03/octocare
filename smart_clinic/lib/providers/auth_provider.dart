@@ -42,11 +42,23 @@ class AuthProvider extends ChangeNotifier {
         _currentUser = User.fromJson(json.decode(userData));
         ApiService.instance.setToken(_token!);
         ApiService.onUnauthorized = refreshTokenMethod;
+        _refreshStoredUserPhoto();
       } catch (_) {
         await logout();
       }
     }
     notifyListeners();
+  }
+
+  Future<void> _refreshStoredUserPhoto() async {
+    if (_currentUser == null) return;
+    try {
+      final response = await ApiService.instance.get('/patients/profile');
+      final url = response['photo_url']?.toString();
+      if (url != null && url.isNotEmpty) {
+        await updateProfilePhoto(url);
+      }
+    } catch (_) {}
   }
 
   Future<Map<String, dynamic>> login(String emailOrPhone, String password) async {
@@ -73,6 +85,7 @@ class AuthProvider extends ChangeNotifier {
           email: response['email'] ?? emailOrPhone,
           firstName: response['first_name'],
           lastName: response['last_name'],
+          profilePhoto: response['photo_url']?.toString(),
         );
 
         final prefs = await SharedPreferences.getInstance();

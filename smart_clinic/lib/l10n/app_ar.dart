@@ -253,7 +253,7 @@ class AppStringsAr {
     'update_profile': 'تحديث الملف الشخصي',
     'profile_updated': 'تم تحديث الملف الشخصي بنجاح',
     'extract_symptoms': 'استخراج الأعراض',
-    'extract_soap': 'استخراج SOAP',
+    'extract_soap': 'استخراج',
     'generate_summary': 'إنشاء ملخص',
     'save_draft': 'حفظ كمسودة',
     'submit_to_queue': 'إرسال للمراجعة',

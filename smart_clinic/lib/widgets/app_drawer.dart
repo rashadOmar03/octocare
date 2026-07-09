@@ -45,6 +45,7 @@ class _AppDrawerState extends State<AppDrawer> {
             currentAccountPicture: UserAvatar(
               key: _avatarKey,
               name: user?.firstName,
+              photoUrl: user?.profilePhoto,
               radius: 20,
             ),
           ),

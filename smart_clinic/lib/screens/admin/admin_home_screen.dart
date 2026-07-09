@@ -129,7 +129,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          UserAvatar(key: _avatarKey, name: user?.firstName),
+                          UserAvatar(
+                            key: _avatarKey,
+                            name: user?.firstName,
+                            photoUrl: user?.profilePhoto,
+                          ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: Column(

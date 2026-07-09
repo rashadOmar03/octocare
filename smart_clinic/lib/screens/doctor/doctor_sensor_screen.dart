@@ -501,19 +501,6 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Card(
-                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        kIsWeb
-                            ? AppLocalizations.tr('wifi_web_hint')
-                            : AppLocalizations.tr('wifi_mobile_hint'),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -597,12 +584,6 @@ class _DoctorSensorScreenState extends State<DoctorSensorScreen> {
                           ),
                           if (!_isConnected) ...[
                             const SizedBox(height: 16),
-                            if (ApiConfig.useCloud)
-                              Text(
-                                AppLocalizations.tr('wifi_cloud_hint'),
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: const Color(0xFF1565C0)),
-                              ),
-                            if (ApiConfig.useCloud) const SizedBox(height: 12),
                             if (!kIsWeb && !ApiConfig.useCloud)
                               TextField(
                                 controller: _hostController,

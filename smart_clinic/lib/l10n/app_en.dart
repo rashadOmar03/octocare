@@ -253,7 +253,7 @@ class AppStringsEn {
     'update_profile': 'Update Profile',
     'profile_updated': 'Profile updated successfully',
     'extract_symptoms': 'Extract Symptoms',
-    'extract_soap': 'Extract SOAP',
+    'extract_soap': 'Extract',
     'generate_summary': 'Generate Summary',
     'save_draft': 'Save Draft',
     'submit_to_queue': 'Submit to Queue',

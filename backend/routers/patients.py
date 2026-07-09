@@ -370,6 +370,12 @@ async def upload_profile_photo(
     with open(file_path, "wb") as f:
         f.write(content)
 
+    content_type = file.content_type or f"image/{ext.lstrip('.')}"
+    if content_type == "image/jpg":
+        content_type = "image/jpeg"
+    profile.photo_data = content
+    profile.photo_content_type = content_type
+
     version = int(datetime.utcnow().timestamp())
     profile.photo_url = f"/uploads/{safe_name}?v={version}"
     db.commit()

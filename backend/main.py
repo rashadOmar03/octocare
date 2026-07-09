@@ -67,6 +67,7 @@ def on_startup():
     _migrate_payment_columns()
     _migrate_medical_record_columns()
     _migrate_prescription_columns()
+    _migrate_profile_photo_columns()
     Base.metadata.create_all(bind=engine)
     seed_data()
     _sync_admin_account()
@@ -484,6 +485,27 @@ def _migrate_prescription_columns():
     conn.close()
 
 
+def _migrate_profile_photo_columns():
+    if not str(engine.url).startswith("sqlite"):
+        return
+    import sqlite3
+    from pathlib import Path
+
+    db_file = Path(__file__).parent / "clinic.db"
+    if not db_file.exists():
+        return
+    conn = sqlite3.connect(str(db_file))
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(profiles)")
+    cols = {row[1] for row in cur.fetchall()}
+    if "photo_data" not in cols:
+        cur.execute("ALTER TABLE profiles ADD COLUMN photo_data BLOB")
+    if "photo_content_type" not in cols:
+        cur.execute("ALTER TABLE profiles ADD COLUMN photo_content_type VARCHAR")
+    conn.commit()
+    conn.close()
+
+
 WEB_BUILD = Path(__file__).parent / "web"
 if not WEB_BUILD.exists():
     WEB_BUILD = Path(__file__).parent.parent / "smart_clinic" / "build" / "web"
@@ -545,13 +567,22 @@ UPLOADS_DIR = Path(__file__).parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
 @app.get("/uploads/{filename}")
-def serve_upload(filename: str):
-    """Serve uploaded files (upload endpoints still require authentication)."""
+def serve_upload(filename: str, db: Session = Depends(get_db)):
+    """Serve uploaded files; avatar images fall back to DB when disk files are missing."""
     safe_name = Path(filename).name
     file_path = UPLOADS_DIR / safe_name
-    if not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(str(file_path))
+    if file_path.is_file():
+        return FileResponse(str(file_path))
+
+    match = re.match(r"avatar_([^.]+)\.[a-zA-Z0-9]+$", safe_name)
+    if match:
+        user_id = match.group(1)
+        profile = db.query(Profile).filter(Profile.user_id == user_id).first()
+        if profile and profile.photo_data:
+            media_type = profile.photo_content_type or "image/jpeg"
+            return Response(content=profile.photo_data, media_type=media_type)
+
+    raise HTTPException(status_code=404, detail="File not found")
 
 @app.get("/api")
 def api_root():

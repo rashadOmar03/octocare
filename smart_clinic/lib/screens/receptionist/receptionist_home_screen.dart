@@ -81,7 +81,11 @@ class _ReceptionistHomeScreenState extends State<ReceptionistHomeScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          UserAvatar(key: _avatarKey, name: auth.currentUser?.firstName),
+                          UserAvatar(
+                            key: _avatarKey,
+                            name: auth.currentUser?.firstName,
+                            photoUrl: auth.currentUser?.profilePhoto,
+                          ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: Column(
@@ -205,8 +209,18 @@ class _ReceptionistHomeScreenState extends State<ReceptionistHomeScreen> {
                     ..._queuePreview.take(5).map(
                           (a) => Card(
                             child: ListTile(
-                              leading: CircleAvatar(child: Text('${a.queueNumber ?? ''}')),
-                              title: Text(a.patientName ?? ''),
+                              leading: UserAvatar(
+                                name: a.patientName,
+                                photoUrl: a.patientPhotoUrl,
+                                patientId: a.patientPhotoUrl == null ? a.patientId : null,
+                                radius: 20,
+                                loadFromApi: false,
+                              ),
+                              title: Text(
+                                a.queueNumber != null
+                                    ? '#${a.queueNumber} • ${a.patientName ?? ''}'
+                                    : (a.patientName ?? ''),
+                              ),
                               subtitle: Text('${a.doctorName ?? ''} • ${TimeFormat.format24To12(a.timeSlot)}'),
                             ),
                           ),

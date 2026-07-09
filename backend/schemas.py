@@ -42,6 +42,7 @@ class TokenResponse(BaseModel):
     last_name: str | None = None
     full_name: str | None = None
     profile_complete: bool = False
+    photo_url: str | None = None
 
 
 class RefreshTokenRequest(BaseModel):

@@ -143,16 +143,18 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    backgroundColor: a.status == 'arrived'
-                        ? const Color(0xFF7B1FA2).withValues(alpha: 0.15)
-                        : null,
-                    child: Text(
-                      a.status == 'arrived' && a.queueNumber != null
-                          ? '${a.queueNumber}'
-                          : (a.patientName?.isNotEmpty == true ? a.patientName![0] : '?'),
-                    ),
-                  ),
+                  a.status == 'arrived' && a.queueNumber != null
+                      ? CircleAvatar(
+                          backgroundColor: const Color(0xFF7B1FA2).withValues(alpha: 0.15),
+                          child: Text('${a.queueNumber}'),
+                        )
+                      : UserAvatar(
+                          name: a.patientName,
+                          photoUrl: a.patientPhotoUrl,
+                          patientId: a.patientPhotoUrl == null ? a.patientId : null,
+                          radius: 20,
+                          loadFromApi: false,
+                        ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -253,7 +255,11 @@ class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          UserAvatar(key: _avatarKey, name: user?.firstName),
+                          UserAvatar(
+                            key: _avatarKey,
+                            name: user?.firstName,
+                            photoUrl: user?.profilePhoto,
+                          ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: Column(

@@ -114,6 +114,7 @@ def _token_response(user: User, profile: Profile | None = None) -> TokenResponse
             else user.email
         ),
         profile_complete=profile_personal_info_complete(profile),
+        photo_url=profile.photo_url if profile else None,
     )
 
 

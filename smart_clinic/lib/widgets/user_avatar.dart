@@ -32,15 +32,20 @@ class UserAvatarState extends State<UserAvatar> {
   void initState() {
     super.initState();
     _photoUrl = PhotoUrlUtils.normalizePath(widget.photoUrl);
-    if (widget.loadFromApi || widget.patientId != null) _loadPhoto();
+    if (widget.loadFromApi || widget.patientId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadPhoto());
+    }
   }
 
   @override
   void didUpdateWidget(UserAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.photoUrl != oldWidget.photoUrl || widget.patientId != oldWidget.patientId) {
-      _photoUrl = PhotoUrlUtils.normalizePath(widget.photoUrl);
-      _imageFailed = false;
+      final next = PhotoUrlUtils.normalizePath(widget.photoUrl);
+      if (next != null) {
+        _photoUrl = next;
+        _imageFailed = false;
+      }
       if (widget.loadFromApi || widget.patientId != null) _loadPhoto();
     }
   }

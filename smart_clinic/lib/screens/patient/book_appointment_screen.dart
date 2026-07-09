@@ -8,6 +8,7 @@ import '../../services/api_service.dart';
 import '../../services/review_service.dart';
 import '../../models/doctor.dart';
 import '../../utils/time_format.dart';
+import '../../widgets/user_avatar.dart';
 
 class BookAppointmentScreen extends StatefulWidget {
   const BookAppointmentScreen({super.key});
@@ -439,7 +440,12 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
         return Card(
           color: isSelected ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1) : null,
           child: ListTile(
-            leading: CircleAvatar(child: Text(displayName.isNotEmpty ? displayName[0] : '?')),
+            leading: UserAvatar(
+              name: displayName,
+              photoUrl: d.profilePhoto,
+              radius: 20,
+              loadFromApi: false,
+            ),
             title: Text(displayName.isEmpty ? AppLocalizations.tr('doctor') : displayName),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

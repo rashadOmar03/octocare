@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, date
 
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, Date, DateTime, Text, JSON,
+    Column, String, Integer, Float, Boolean, Date, DateTime, Text, JSON, LargeBinary,
     ForeignKey, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
@@ -52,6 +52,8 @@ class Profile(Base):
     chronic_diseases = Column(String, nullable=True)
     existing_conditions = Column(String, nullable=True)
     photo_url = Column(String, nullable=True)
+    photo_data = Column(LargeBinary, nullable=True)
+    photo_content_type = Column(String, nullable=True)
     is_complete = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="profile")

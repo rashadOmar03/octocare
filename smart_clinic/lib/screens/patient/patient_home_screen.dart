@@ -104,6 +104,7 @@ class _PatientHomeScreenState extends State<PatientHomeScreen> {
                           UserAvatar(
                             key: _avatarKey,
                             name: user?.firstName,
+                            photoUrl: user?.profilePhoto,
                           ),
                           const SizedBox(width: 16),
                           Expanded(
