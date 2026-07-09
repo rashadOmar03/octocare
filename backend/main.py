@@ -67,7 +67,9 @@ def on_startup():
     _migrate_payment_columns()
     _migrate_medical_record_columns()
     _migrate_prescription_columns()
-    _migrate_profile_photo_columns()
+    from db_maintenance import migrate_profile_photo_columns
+
+    migrate_profile_photo_columns()
     Base.metadata.create_all(bind=engine)
     seed_data()
     _sync_admin_account()
@@ -481,27 +483,6 @@ def _migrate_prescription_columns():
     cols = {row[1] for row in cur.fetchall()}
     if "active_until" not in cols:
         cur.execute("ALTER TABLE prescriptions ADD COLUMN active_until DATETIME")
-    conn.commit()
-    conn.close()
-
-
-def _migrate_profile_photo_columns():
-    if not str(engine.url).startswith("sqlite"):
-        return
-    import sqlite3
-    from pathlib import Path
-
-    db_file = Path(__file__).parent / "clinic.db"
-    if not db_file.exists():
-        return
-    conn = sqlite3.connect(str(db_file))
-    cur = conn.cursor()
-    cur.execute("PRAGMA table_info(profiles)")
-    cols = {row[1] for row in cur.fetchall()}
-    if "photo_data" not in cols:
-        cur.execute("ALTER TABLE profiles ADD COLUMN photo_data BLOB")
-    if "photo_content_type" not in cols:
-        cur.execute("ALTER TABLE profiles ADD COLUMN photo_content_type VARCHAR")
     conn.commit()
     conn.close()
 

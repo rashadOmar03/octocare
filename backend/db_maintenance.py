@@ -66,6 +66,36 @@ def drop_spo2_column() -> bool:
     return True
 
 
+def migrate_profile_photo_columns() -> bool:
+    """Add profiles.photo_data and photo_content_type (Postgres/SQLite)."""
+    from sqlalchemy import inspect, text
+
+    from database import engine
+
+    try:
+        insp = inspect(engine)
+        if "profiles" not in insp.get_table_names():
+            return False
+        cols = {c["name"] for c in insp.get_columns("profiles")}
+        added = False
+        with engine.begin() as conn:
+            if "photo_data" not in cols:
+                if engine.dialect.name == "postgresql":
+                    conn.execute(text("ALTER TABLE profiles ADD COLUMN photo_data BYTEA"))
+                else:
+                    conn.execute(text("ALTER TABLE profiles ADD COLUMN photo_data BLOB"))
+                added = True
+            if "photo_content_type" not in cols:
+                conn.execute(text("ALTER TABLE profiles ADD COLUMN photo_content_type VARCHAR"))
+                added = True
+        if added:
+            print("[Octocare Clinic] Added profile photo_data columns")
+        return added
+    except Exception as exc:
+        print(f"[Octocare Clinic] Profile photo migration warning: {exc}")
+        return False
+
+
 def migrate_doctor_features() -> bool:
     """Add doctors.consultation_fee on existing databases (Postgres/SQLite)."""
     from sqlalchemy import inspect, text
@@ -153,6 +183,7 @@ def clean_legacy_invalid_data(db: Session) -> dict[str, int]:
 
 def run_startup_maintenance(db: Session) -> None:
     drop_spo2_column()
+    migrate_profile_photo_columns()
     migrate_doctor_features()
     clean_legacy_invalid_data(db)
     from clinic_schedule import ensure_clinic_working_days, ensure_doctor_schedules, repair_invalid_clinic_hours
